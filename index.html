@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>RescueCards | Pro Admin Hub</title>
+    <title>RescueCards | Final MVP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -17,24 +17,38 @@
         .pulse-alert { animation: alert-pulse 1s infinite; border: 4px solid white; }
         @keyframes alert-pulse { 0% { transform: scale(1); background-color: #dc2626; } 50% { transform: scale(1.02); background-color: #b91c1c; } 100% { transform: scale(1); background-color: #dc2626; } }
         .step-item { transition: all 0.2s; }
+        /* Schování scrollbaru u kategorií */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-900">
 
-    <nav class="bg-red-600 text-white p-4 shadow-xl sticky top-0 z-50">
-        <div class="max-w-4xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold flex items-center gap-2"><i class="fas fa-heart-pulse"></i> RescueCards Hub</h1>
-            <div class="flex items-center gap-4">
-                <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg hidden md:block">
+    <nav class="bg-red-600 text-white p-3 sm:p-4 shadow-xl sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto flex justify-between items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-bold flex items-center gap-2 truncate">
+                <i class="fas fa-heart-pulse"></i> 
+                <span class="hidden sm:inline">RescueCards Hub</span>
+                <span class="sm:hidden">RescueCards</span>
+            </h1>
+            <div class="flex items-center gap-2 sm:gap-4 shrink-0">
+                <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="Sdílet aplikaci">
                     <img id="mainAppQr" class="w-8 h-8" alt="QR App">
                 </div>
-                <button onclick="openAdmin()" class="bg-red-800 hover:bg-red-900 px-4 py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition">Přidat kartu</button>
+                <button onclick="openAdmin()" class="bg-red-800 hover:bg-red-900 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition">Přidat</button>
             </div>
         </div>
     </nav>
 
     <header class="max-w-4xl mx-auto p-4 pt-6 text-center">
-        <input type="text" id="searchInput" onkeyup="filterAndSearchCards()" placeholder="Vyhledat kartu nebo klíčové slovo..." class="w-full md:w-3/4 p-4 rounded-2xl shadow-md border border-slate-200 outline-none focus:ring-2 focus:ring-red-400 mb-6 transition">
+        <input type="text" id="searchInput" onkeyup="filterAndSearchCards()" placeholder="Vyhledat kartu nebo klíčové slovo..." class="w-full md:w-3/4 p-4 rounded-2xl shadow-md border border-slate-200 outline-none focus:ring-2 focus:ring-red-400 mb-4 transition">
+        
+        <div class="flex gap-2 justify-center overflow-x-auto pb-2 no-scrollbar">
+            <button onclick="filterCards('all', this)" class="filter-btn active bg-red-600 text-white px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Vše</button>
+            <button onclick="filterCards('deti', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Děti</button>
+            <button onclick="filterCards('interna', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Interna</button>
+            <button onclick="filterCards('trauma', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Trauma</button>
+        </div>
     </header>
 
     <main class="max-w-4xl mx-auto p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="cardContainer">
@@ -174,10 +188,11 @@
                         </div>
                     </div>
                     <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 uppercase tracking-tight">${card.title}</h3>
-                    <p class="text-slate-500 text-sm mb-4 line-clamp-2 leading-snug">${card.desc || 'Bez popisu.'}</p>
+                    <p class="text-slate-500 text-sm mb-4 line-clamp-2 leading-snug">${card.desc || ''}</p>
                     <button onclick="openCard('${card.id}')" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-red-600 transition shadow-lg">Otevřít instrukce</button>
                 </div>
             `).join('');
+            if(cards.length === 0) container.innerHTML = '<div class="col-span-full text-center py-10 text-slate-400">Žádné karty nenalezeny.</div>';
             document.getElementById('loadingState').style.display = 'none';
         }
 
@@ -249,7 +264,7 @@
                 location.reload();
             } catch (err) {
                 alert("Chyba: " + err.message);
-                btn.disabled = false; btn.innerText = "Uložit";
+                btn.disabled = false; btn.innerText = "Uložit na Cloud";
             }
         };
 
@@ -294,20 +309,56 @@
         window.zoomImage = src => { document.getElementById('zoomImgContainer').innerHTML = `<img src="${src}" class="rounded-xl">`; document.getElementById('zoomOverlay').classList.add('active'); };
         window.closeZoom = () => document.getElementById('zoomOverlay').classList.remove('active');
         window.closeAll = () => { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); document.body.classList.remove('no-scroll'); };
+        
         window.openAdmin = () => { 
             document.getElementById('editId').value = ""; 
             document.getElementById('adminTitle').innerText = "Nová edukační karta";
+            document.getElementById('newTitle').value = "";
+            document.getElementById('newDesc').value = "";
+            document.getElementById('newTags').value = "";
+            document.getElementById('newImageFile').value = "";
             document.getElementById('adminStepsList').innerHTML = "";
             addStepField(false);
             document.getElementById('adminModal').classList.add('active'); 
             document.body.classList.add('no-scroll');
         };
 
+        // OBNOVENÁ LOGIKA FILTRŮ KATEGORIÍ A VYHLEDÁVÁNÍ
         window.filterAndSearchCards = function() {
             const term = document.getElementById('searchInput').value.toLowerCase();
             let filtered = myCards;
-            if (term) filtered = filtered.filter(c => c.title.toLowerCase().includes(term) || (c.tags && c.tags.some(t => t.includes(term))));
+            
+            // Filtrování podle kategorie
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(c => c.category === currentFilter);
+            }
+            
+            // Filtrování podle textu
+            if (term) {
+                filtered = filtered.filter(c => 
+                    c.title.toLowerCase().includes(term) || 
+                    (c.tags && c.tags.some(t => t.includes(term))) ||
+                    (c.desc && c.desc.toLowerCase().includes(term))
+                );
+            }
+            
             renderGrid(filtered);
+        };
+
+        window.filterCards = function(cat, btn) {
+            currentFilter = cat;
+            
+            // Odebrání vizuálního stavu ze všech tlačítek
+            document.querySelectorAll('.filter-btn').forEach(b => { 
+                b.classList.remove('active', 'bg-red-600', 'text-white'); 
+                b.classList.add('bg-white', 'text-slate-600'); 
+            });
+            
+            // Přidání vizuálního stavu na kliknuté tlačítko
+            btn.classList.add('active', 'bg-red-600', 'text-white');
+            btn.classList.remove('bg-white', 'text-slate-600');
+            
+            filterAndSearchCards();
         };
 
         window.loadCards();
