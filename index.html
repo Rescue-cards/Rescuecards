@@ -12,7 +12,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Základní UI a animace */
         .no-scroll { overflow: hidden !important; height: 100vh !important; }
         .modal { display: none; position: fixed; inset: 0; z-index: 100; align-items: center; justify-content: center; }
         .modal.active { display: flex; }
@@ -22,6 +21,14 @@
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #dc2626; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
+        /* Pulzující alert pro linku 155 */
+        .pulse-red { animation: pulse-red-bg 1.5s infinite; }
+        @keyframes pulse-red-bg {
+            0% { background-color: #dc2626; transform: scale(1); }
+            50% { background-color: #ef4444; transform: scale(1.02); }
+            100% { background-color: #dc2626; transform: scale(1); }
+        }
+
         .install-ready { animation: heart-beat 1.5s infinite; cursor: pointer; color: #fee2e2; }
         @keyframes heart-beat {
             0% { transform: scale(1); }
@@ -34,14 +41,8 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Ochrana proti nechtěnému označování textu v detailu karty */
-        #modalContent {
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        #modalContent img {
-            -webkit-touch-callout: none;
-        }
+        #modalContent { user-select: none; -webkit-user-select: none; }
+        #modalContent img { -webkit-touch-callout: none; }
     </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-900">
@@ -50,11 +51,10 @@
         <div class="max-w-4xl mx-auto flex justify-between items-center gap-2">
             <h1 class="text-lg sm:text-xl font-bold flex items-center gap-2 truncate select-none">
                 <i id="logoHeart" class="fas fa-heart-pulse transition-transform active:scale-90"></i> 
-                <span class="hidden sm:inline">RescueCards Hub</span>
-                <span class="sm:hidden">RescueCards</span>
+                <span>RescueCards</span>
             </h1>
             <div class="flex items-center gap-2 sm:gap-4 shrink-0">
-                <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="QR kód aplikace" onclick="zoomImage(document.getElementById('mainAppQr').src)">
+                <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" onclick="zoomImage(document.getElementById('mainAppQr').src)">
                     <img id="mainAppQr" class="w-8 h-8" alt="QR App">
                 </div>
                 <button onclick="openAdmin()" class="bg-red-800 hover:bg-red-900 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition">Přidat kartu</button>
@@ -82,6 +82,10 @@
     <div id="modal" class="modal">
         <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onclick="closeAll()"></div>
         <div class="bg-white w-11/12 md:max-w-xl mx-auto rounded-3xl shadow-2xl z-[110] overflow-hidden flex flex-col max-h-[90vh] relative">
+            <div id="zzsAlert" class="hidden pulse-red text-white p-4 flex items-center justify-center gap-3 shadow-lg z-[120]">
+                <i class="fas fa-phone-alt animate-bounce"></i>
+                <span class="font-black uppercase tracking-wider text-sm">Kritický stav! Volej 155</span>
+            </div>
             <div class="p-8 overflow-y-auto" id="modalContent"></div>
             <button onclick="closeAll()" class="w-full bg-red-600 text-white py-6 font-black uppercase tracking-widest text-sm">Zavřít kartu</button>
         </div>
@@ -90,21 +94,17 @@
     <div id="adminModal" class="modal">
         <div class="absolute inset-0 bg-slate-900/80" onclick="closeAll()"></div>
         <div class="bg-white w-11/12 md:max-w-xl mx-auto rounded-3xl z-[110] overflow-hidden flex flex-col relative shadow-2xl border border-slate-300 text-sm">
-            <div class="bg-slate-800 text-white p-4 text-center">
-                <h3 id="adminTitle" class="font-bold uppercase text-xs tracking-widest">Editor karty</h3>
-            </div>
+            <div class="bg-slate-800 text-white p-4 text-center"><h3 id="adminTitle" class="font-bold uppercase text-xs tracking-widest">Editor karty</h3></div>
             <div class="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
                 <input type="hidden" id="editId">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input type="text" id="newTitle" placeholder="Název situace" class="w-full border p-3 rounded-xl bg-slate-50">
                     <select id="newCategory" class="w-full border p-3 rounded-xl bg-slate-50 font-bold">
-                        <option value="deti">Dětský pacient</option>
-                        <option value="interna">Interna</option>
-                        <option value="trauma">Trauma / Úrazy</option>
+                        <option value="deti">Dětský pacient</option><option value="interna">Interna</option><option value="trauma">Trauma / Úrazy</option>
                     </select>
                 </div>
                 <input type="text" id="newDesc" placeholder="Stručný popis" class="w-full border p-3 rounded-xl bg-slate-50 text-sm">
-                <input type="text" id="newTags" placeholder="Klíčová slova (čárka)" class="w-full border p-3 rounded-xl bg-slate-50 text-xs italic">
+                <input type="text" id="newTags" placeholder="Klíčová slova" class="w-full border p-3 rounded-xl bg-slate-50 text-xs italic">
                 <input type="file" id="newImageFile" accept="image/*" class="w-full text-xs border border-dashed p-4 rounded-xl">
                 <div class="bg-slate-100 p-4 rounded-2xl">
                     <div id="adminStepsList" class="space-y-2"></div>
@@ -121,9 +121,7 @@
         </div>
     </div>
 
-    <div id="zoomOverlay" class="modal" onclick="closeZoom()">
-        <div id="zoomImgContainer" class="min-h-screen w-full flex items-center justify-center p-4"></div>
-    </div>
+    <div id="zoomOverlay" class="modal" onclick="closeZoom()"><div id="zoomImgContainer" class="min-h-screen w-full flex items-center justify-center p-4"></div></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -139,16 +137,14 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        const db = initializeFirestore(app, {
-            localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
-        });
+        const db = initializeFirestore(app, { localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()}) });
 
         let myCards = [];
         let currentFilter = 'all';
 
-        // --- UI FUNKCE ---
         window.closeAll = () => {
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            document.getElementById('zzsAlert').classList.add('hidden'); // Reset alertu
             document.body.classList.remove('no-scroll');
         };
 
@@ -173,14 +169,12 @@
             const query = document.getElementById('searchInput').value.toLowerCase();
             const filtered = myCards.filter(c => {
                 const matchesCat = currentFilter === 'all' || c.category === currentFilter;
-                const matchesSearch = c.title.toLowerCase().includes(query) || 
-                                    (c.tags && c.tags.some(t => t.includes(query)));
+                const matchesSearch = c.title.toLowerCase().includes(query) || (c.tags && c.tags.some(t => t.includes(query)));
                 return matchesCat && matchesSearch;
             });
             renderGrid(filtered);
         };
 
-        // --- DETAIL KARTY & ODŠKRTÁVÁNÍ ---
         window.openCard = id => {
             const card = myCards.find(c => c.id === id);
             const steps = card.steps_v2 || [];
@@ -190,16 +184,10 @@
                     <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-tight">${card.title}</h2>
                     <p class="text-slate-500 text-sm mt-1 uppercase font-bold tracking-wide">${card.category || ''}</p>
                 </div>
-
-                ${card.image ? `
-                    <div class="mb-8 relative group">
-                        <img src="${card.image}" class="w-full rounded-3xl shadow-lg border-4 border-white cursor-zoom-in" 
-                             onclick="zoomImage('${card.image}')">
-                    </div>` : ''}
-                
+                ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-lg mb-8 border-4 border-white cursor-zoom-in" onclick="zoomImage('${card.image}')">` : ''}
                 <div class="space-y-3 pb-6" id="stepsList">
                     ${steps.map((s, index) => `
-                        <div onclick="toggleStep(this)" class="group cursor-pointer flex items-center gap-4 p-5 rounded-2xl border-2 transition-all active:scale-[0.98] ${s.critical ? 'bg-red-50 border-red-200 text-red-900 shadow-sm' : 'bg-white border-slate-100 text-slate-700'}">
+                        <div onclick="toggleStep(this)" data-critical-step="${s.critical}" class="step-row group cursor-pointer flex items-center gap-4 p-5 rounded-2xl border-2 transition-all active:scale-[0.98] ${s.critical ? 'bg-red-50 border-red-200 text-red-900' : 'bg-white border-slate-100 text-slate-700'}">
                             <div class="step-check w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${s.critical ? 'border-red-300' : 'border-slate-200'}">
                                 <i class="fas fa-check text-white scale-0 transition-transform"></i>
                             </div>
@@ -215,24 +203,38 @@
         window.toggleStep = (el) => {
             const checkCircle = el.querySelector('.step-check');
             const icon = el.querySelector('.fa-check');
-            const isCritical = el.classList.contains('bg-red-50');
+            const isCriticalRow = el.dataset.criticalStep === "true";
 
             if (el.dataset.checked === "true") {
                 el.dataset.checked = "false";
                 el.style.opacity = "1";
                 icon.classList.replace('scale-100', 'scale-0');
                 checkCircle.classList.remove('bg-green-500', 'border-green-500');
-                checkCircle.classList.add(isCritical ? 'border-red-300' : 'border-slate-200');
             } else {
                 el.dataset.checked = "true";
                 el.style.opacity = "0.4";
                 icon.classList.replace('scale-0', 'scale-100');
-                checkCircle.classList.remove('border-red-300', 'border-slate-200');
                 checkCircle.classList.add('bg-green-500', 'border-green-500');
             }
+
+            // Kontrola, zda je potřeba zobrazit alert "Volej 155"
+            updateZzsAlert();
         };
 
-        // --- ADMINISTRACE (Editor otevřen přímo bez hesla) ---
+        function updateZzsAlert() {
+            const alertBox = document.getElementById('zzsAlert');
+            const criticalSteps = document.querySelectorAll('.step-row[data-critical-step="true"]');
+            
+            // Alert zobrazíme, pokud existuje kritický krok, který JEŠTĚ NENÍ odškrtnutý
+            let show = false;
+            criticalSteps.forEach(row => {
+                if (row.dataset.checked !== "true") show = true;
+            });
+
+            if (show) alertBox.classList.remove('hidden');
+            else alertBox.classList.add('hidden');
+        }
+
         window.openAdmin = () => {
             document.getElementById('editId').value = "";
             document.getElementById('adminTitle').innerText = "Nová karta";
@@ -266,7 +268,6 @@
             else if (direction === 1 && item.nextElementSibling) item.parentNode.insertBefore(item.nextElementSibling, item);
         };
 
-        // --- FIREBASE OPERACE ---
         window.loadCards = async function() {
             try {
                 const querySnapshot = await getDocs(collection(db, "cards"));
@@ -288,7 +289,7 @@
                         </div>
                     </div>
                     ${card.image ? `<div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 border border-slate-100 shadow-inner"><img src="${card.image}" class="w-full h-full object-cover"></div>` : ''}
-                    <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 uppercase tracking-tight">${card.title}</h3>
+                    <h3 class="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">${card.title}</h3>
                     <p class="text-slate-500 text-sm mb-4 line-clamp-2 leading-snug flex-grow">${card.desc || ''}</p>
                     <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-red-600 transition shadow-lg">Otevřít</button>
                 </div>
@@ -296,7 +297,7 @@
             if(document.getElementById('loadingState')) document.getElementById('loadingState').style.display = 'none';
         }
 
-        window.deleteCard = async id => { if(confirm("Opravdu smazat tuto kartu?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); } };
+        window.deleteCard = async id => { if(confirm("Smazat kartu?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); } };
 
         window.editCard = id => {
             const card = myCards.find(c => c.id === id);
@@ -329,7 +330,6 @@
                     tags: document.getElementById('newTags').value.toLowerCase().split(',').map(t => t.trim()).filter(t => t !== ''),
                     steps_v2: steps_v2
                 };
-                
                 if (fileInput.files[0]) {
                     data.image = await new Promise(res => {
                         const r = new FileReader();
@@ -351,24 +351,15 @@
                     const old = myCards.find(c => c.id === editId);
                     if(old.image) data.image = old.image;
                 }
-
                 if (editId) await updateDoc(doc(db, "cards", editId), data);
                 else await addDoc(collection(db, "cards"), data);
-                
-                closeAll();
-                loadCards();
+                closeAll(); loadCards();
                 btn.disabled = false; btn.innerText = "Uložit";
-            } catch (err) {
-                alert("Chyba při ukládání: " + err.message);
-                btn.disabled = false; btn.innerText = "Uložit";
-            }
+            } catch (err) { alert("Chyba: " + err.message); btn.disabled = false; btn.innerText = "Uložit"; }
         };
 
-        // --- INICIALIZACE PWA ---
         window.addEventListener('load', () => {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
-            }
+            if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
             const appUrl = window.location.href.split('?')[0];
             document.getElementById('mainAppQr').src = `https://quickchart.io/qr?text=${encodeURIComponent(appUrl)}&size=300`;
             loadCards();
@@ -376,25 +367,14 @@
 
         let deferredPrompt;
         const logoHeart = document.getElementById('logoHeart');
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            logoHeart.classList.add('install-ready');
-        });
-
+        window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; logoHeart.classList.add('install-ready'); });
         logoHeart.addEventListener('click', async () => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    logoHeart.classList.remove('install-ready');
-                    deferredPrompt = null;
-                }
-            } else {
-                alert("Pro instalaci na iPhone: klepněte na tlačítko sdílení (čtvereček se šipkou) a zvolte 'Přidat na plochu'.");
-            }
+                if (outcome === 'accepted') { logoHeart.classList.remove('install-ready'); deferredPrompt = null; }
+            } else { alert("Pro instalaci na iPhone zvolte 'Sdílet' -> 'Přidat na plochu'."); }
         });
-
     </script>
 </body>
 </html>
