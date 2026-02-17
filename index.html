@@ -24,22 +24,14 @@
         .pulse-alert { animation: alert-pulse 1s infinite; border: 4px solid white; }
         @keyframes alert-pulse { 0% { transform: scale(1); background-color: #dc2626; } 50% { transform: scale(1.02); background-color: #b91c1c; } 100% { transform: scale(1); background-color: #dc2626; } }
         
-        .install-ready { animation: heart-beat 1.5s infinite; cursor: pointer; color: #fee2e2; }
-        @keyframes heart-beat {
-            0% { transform: scale(1); }
-            15% { transform: scale(1.3); }
-            30% { transform: scale(1); }
-            45% { transform: scale(1.15); }
-            60% { transform: scale(1); }
-        }
-
         .step-item { transition: all 0.2s; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Styl pro export - skryje prvky, které nechceme na fotce */
+        /* Styl pro export - skryje prvky, které nechceme na fotce (checkboxy, šipky v editoru) */
         .screenshot-mode .no-export { display: none !important; }
-        .screenshot-mode { padding: 20px !important; background: white !important; }
+        /* Při screenshotu přidáme bílé pozadí a padding, aby to vypadalo jako papír */
+        .screenshot-mode { padding: 30px !important; background: white !important; border-radius: 0 !important; }
     </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-900">
@@ -47,7 +39,7 @@
     <nav class="bg-red-600 text-white p-3 sm:p-4 shadow-xl sticky top-0 z-50">
         <div class="max-w-4xl mx-auto flex justify-between items-center gap-2">
             <h1 class="text-lg sm:text-xl font-bold flex items-center gap-2 truncate select-none">
-                <i id="logoHeart" class="fas fa-heart-pulse transition-transform active:scale-90"></i> 
+                <i class="fas fa-heart-pulse"></i> 
                 <span class="hidden sm:inline">RescueCards Hub</span>
                 <span class="sm:hidden">RescueCards</span>
             </h1>
@@ -115,7 +107,7 @@
             <div class="p-8 overflow-y-auto" id="modalContent"></div>
             
             <div class="flex border-t no-export">
-                <button onclick="downloadCardAsImage()" class="w-1/4 bg-slate-100 text-slate-600 py-6 border-r border-slate-200 hover:bg-slate-200 transition">
+                <button onclick="downloadCardAsImage()" class="w-1/4 bg-slate-100 text-slate-600 py-6 border-r border-slate-200 hover:bg-slate-200 transition" title="Stáhnout jako obrázek">
                     <i class="fas fa-camera text-xl"></i>
                 </button>
                 <button onclick="closeAll()" class="w-3/4 bg-red-600 text-white py-6 font-black uppercase tracking-widest text-sm">Zavřít kartu</button>
@@ -141,6 +133,7 @@
         };
 
         const app = initializeApp(firebaseConfig);
+        // Inicializace Firestore s offline cache
         const db = initializeFirestore(app, {
             localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
         });
@@ -148,55 +141,41 @@
         let myCards = [];
         let currentFilter = 'all';
 
+        // Registrace Service Workeru pro PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
             });
         }
-
-        let deferredPrompt;
-        const logoHeart = document.getElementById('logoHeart');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            logoHeart.classList.add('install-ready');
-        });
-
-        logoHeart.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    logoHeart.classList.remove('install-ready');
-                    deferredPrompt = null;
-                }
-            } else {
-                logoHeart.style.transform = "scale(1.4)";
-                setTimeout(() => logoHeart.style.transform = "scale(1)", 200);
-            }
-        });
+        
+        // --- ZDE BYLA ODSTRANĚNA LOGIKA PRO INSTALACI "POD SRDCEM" ---
 
         const appUrl = window.location.href.split('?')[0];
         document.getElementById('mainAppQr').src = `https://quickchart.io/qr?text=${encodeURIComponent(appUrl)}&size=300`;
 
-        // --- FUNKCE PRO SCREENSHOT (PŘIDÁNO) ---
+        // --- FUNKCE PRO SCREENSHOT ---
         window.downloadCardAsImage = function() {
             const area = document.getElementById('modalCaptureArea');
-            const originalTitle = document.querySelector('#modalContent h2').innerText;
+            // Získáme název karty pro jméno souboru
+            const originalTitle = document.querySelector('#modalContent h2') ? document.querySelector('#modalContent h2').innerText : 'karta';
             
-            // Dočasně přidáme třídu pro čistý export
+            // Přidáme třídu, která upraví styly pro tisk (bílé pozadí, skrytí tlačítek)
             area.classList.add('screenshot-mode');
             
             html2canvas(area, {
-                useCORS: true, // Důležité pro načtení obrázků z cloudu
-                scale: 2,      // Vyšší kvalita
-                backgroundColor: "#ffffff"
+                useCORS: true, // Povolí načtení obrázků z externích zdrojů
+                scale: 2,      // Vyšší kvalita výstupu
+                backgroundColor: "#ffffff", // Vynutí bílé pozadí
+                logging: false // Vypne zbytečné výpisy do konzole
             }).then(canvas => {
+                // Vytvoření a kliknutí na odkaz pro stažení
                 const link = document.createElement('a');
-                link.download = `RescueCard-${originalTitle}.png`;
+                // Ošetření názvu souboru pro různé systémy
+                const safeTitle = originalTitle.replace(/[^a-z0-9áčďéěíňóřšťúůýž ]/gi, '').trim();
+                link.download = `RescueCard-${safeTitle || 'export'}.png`;
                 link.href = canvas.toDataURL("image/png");
                 link.click();
+                // Vrácení stylů do původního stavu
                 area.classList.remove('screenshot-mode');
             });
         };
@@ -213,6 +192,7 @@
         window.addStepField = (isCritical, value = "") => {
             const list = document.getElementById('adminStepsList');
             const div = document.createElement('div');
+            // Přidána třída no-export pro skrytí při screenshotu
             div.className = `step-item flex items-center gap-3 p-3 rounded-xl ${isCritical ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'} border shadow-sm`;
             div.dataset.critical = isCritical;
             div.innerHTML = `
@@ -241,7 +221,7 @@
                 <div class="bg-white rounded-3xl shadow-md border-b-8 border-slate-200 p-6 flex flex-col h-full">
                     <div class="flex justify-between items-center mb-4">
                         <span class="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded">${card.category || 'Vše'}</span>
-                        <div class="flex gap-4">
+                        <div class="flex gap-4 no-export">
                             <button onclick="editCard('${card.id}')" class="text-slate-300"><i class="fas fa-edit text-sm"></i></button>
                             <button onclick="deleteCard('${card.id}')" class="text-slate-300"><i class="fas fa-trash-alt text-sm"></i></button>
                         </div>
@@ -265,6 +245,7 @@
             document.getElementById('newCategory').value = card.category;
             document.getElementById('newDesc').value = card.desc || "";
             document.getElementById('newTags').value = card.tags ? card.tags.join(', ') : '';
+            document.getElementById('newImageFile').value = "";
             document.getElementById('adminStepsList').innerHTML = "";
             const steps = card.steps_v2 || [];
             steps.forEach(s => addStepField(s.critical, s.text));
@@ -312,79 +293,3 @@
                 location.reload();
             } catch (err) {
                 alert("Chyba: " + err.message);
-                btn.disabled = false; btn.innerText = "Uložit";
-            }
-        };
-
-        window.checkCritical = () => {
-            const alertBox = document.getElementById('zzsAlert');
-            const anyCriticalChecked = Array.from(document.querySelectorAll('.critical-check')).some(c => c.checked);
-            if (anyCriticalChecked) { alertBox.classList.remove('hidden'); alertBox.classList.add('flex'); }
-            else { alertBox.classList.add('hidden'); alertBox.classList.remove('flex'); }
-        };
-
-        window.openCard = id => {
-            const card = myCards.find(c => c.id === id);
-            const steps = card.steps_v2 || [];
-            const cardUrl = window.location.href.split('?')[0] + "?id=" + card.id;
-            const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(cardUrl)}&size=300`;
-            document.getElementById('modalContent').innerHTML = `
-                <div class="flex justify-between items-start mb-6">
-                    <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
-                    <div class="bg-slate-100 p-2 rounded-xl border border-slate-200 shrink-0 ml-4 no-export">
-                        <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-80 cursor-zoom-in" onclick="zoomImage('${dynamicQrUrl}')">
-                    </div>
-                </div>
-                ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-xl mb-8 border-4 border-white cursor-zoom-in" onclick="zoomImage('${card.image}')">` : ''}
-                <div class="space-y-4 pb-6">
-                    ${steps.map(s => `
-                        <label class="flex items-center gap-5 p-5 ${s.critical ? 'bg-red-50 border-2 border-red-200' : 'bg-slate-50 border border-slate-200'} rounded-3xl active:scale-95 transition-all cursor-pointer shadow-sm">
-                            <input type="checkbox" onchange="checkCritical()" class="w-8 h-8 accent-red-600 rounded-xl ${s.critical ? 'critical-check' : ''} no-export">
-                            <div class="flex-1">
-                                ${s.critical ? '<span class="block text-[10px] font-black text-red-600 uppercase tracking-widest mb-1 italic">Kritické ohrožení života!</span>' : ''}
-                                <span class="text-lg font-bold ${s.critical ? 'text-red-900' : 'text-slate-700'} leading-snug">${s.text}</span>
-                            </div>
-                        </label>
-                    `).join('')}
-                </div>
-                <div id="zzsAlert" class="hidden p-8 bg-red-600 text-white rounded-3xl text-center mb-6 pulse-alert flex-col items-center gap-3">
-                    <i class="fas fa-phone-alt text-4xl animate-bounce"></i>
-                    <h3 class="text-2xl font-black uppercase tracking-widest">Volejte 155!</h3>
-                </div>
-            `;
-            document.getElementById('modal').classList.add('active');
-            document.body.classList.add('no-scroll');
-        };
-
-        window.zoomImage = src => { document.getElementById('zoomImgContainer').innerHTML = `<img src="${src}" class="rounded-xl">`; document.getElementById('zoomOverlay').classList.add('active'); };
-        window.closeZoom = () => document.getElementById('zoomOverlay').classList.remove('active');
-        window.closeAll = () => { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); document.body.classList.remove('no-scroll'); };
-        window.openAdmin = () => { 
-            document.getElementById('editId').value = ""; 
-            document.getElementById('adminTitle').innerText = "Nová karta";
-            document.getElementById('adminStepsList').innerHTML = "";
-            addStepField(false);
-            document.getElementById('adminModal').classList.add('active'); 
-            document.body.classList.add('no-scroll');
-        };
-
-        window.filterAndSearchCards = function() {
-            const term = document.getElementById('searchInput').value.toLowerCase();
-            let filtered = myCards;
-            if (currentFilter !== 'all') filtered = filtered.filter(c => c.category === currentFilter);
-            if (term) filtered = filtered.filter(c => c.title.toLowerCase().includes(term) || (c.tags && c.tags.some(t => t.includes(term))) || (c.desc && c.desc.toLowerCase().includes(term)));
-            renderGrid(filtered);
-        };
-
-        window.filterCards = function(cat, btn) {
-            currentFilter = cat;
-            document.querySelectorAll('.filter-btn').forEach(b => { b.classList.remove('active', 'bg-red-600', 'text-white'); b.classList.add('bg-white', 'text-slate-600'); });
-            btn.classList.add('active', 'bg-red-600', 'text-white');
-            btn.classList.remove('bg-white', 'text-slate-600');
-            filterAndSearchCards();
-        };
-
-        window.loadCards();
-    </script>
-</body>
-</html>
