@@ -3,12 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>RescueCards | Pro Hub</title>
-    
-    <link rel="manifest" href="./manifest.json">
-    <meta name="theme-color" content="#dc2626">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/803/803087.png">
-
+    <title>RescueCards | Final MVP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -17,21 +12,13 @@
         .modal.active { display: flex; }
         #zoomOverlay { z-index: 200; background: rgba(0,0,0,0.98); overflow: auto; }
         #zoomOverlay img { max-width: 100%; height: auto; cursor: zoom-out; max-height: 90vh; }
-        
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #dc2626; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        .pulse-red { animation: pulse-red-bg 1.5s infinite; }
-        @keyframes pulse-red-bg {
-            0% { background-color: #dc2626; }
-            50% { background-color: #ef4444; }
-            100% { background-color: #dc2626; }
-        }
-
+        .pulse-alert { animation: alert-pulse 1s infinite; border: 4px solid white; }
+        @keyframes alert-pulse { 0% { transform: scale(1); background-color: #dc2626; } 50% { transform: scale(1.02); background-color: #b91c1c; } 100% { transform: scale(1); background-color: #dc2626; } }
+        .step-item { transition: all 0.2s; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        #modalContent { user-select: none; -webkit-user-select: none; }
     </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-900">
@@ -39,77 +26,103 @@
     <nav class="bg-red-600 text-white p-3 sm:p-4 shadow-xl sticky top-0 z-50">
         <div class="max-w-4xl mx-auto flex justify-between items-center gap-2">
             <h1 class="text-lg sm:text-xl font-bold flex items-center gap-2 truncate">
-                <i id="logoHeart" class="fas fa-heart-pulse"></i> 
-                <span>RescueCards</span>
+                <i class="fas fa-heart-pulse"></i> 
+                <span class="hidden sm:inline">RescueCards Hub</span>
+                <span class="sm:hidden">RescueCards</span>
             </h1>
-            <div class="flex items-center gap-4 shrink-0">
-                <img id="mainAppQr" class="w-8 h-8 cursor-pointer bg-white p-1 rounded" onclick="zoomImage(this.src)">
-                <button onclick="openAdmin()" class="bg-red-800 px-3 py-2 rounded-lg text-xs font-bold uppercase">Přidat</button>
+            <div class="flex items-center gap-2 sm:gap-4 shrink-0">
+                <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="Sdílet aplikaci" onclick="zoomImage(document.getElementById('mainAppQr').src)">
+                    <img id="mainAppQr" class="w-8 h-8" alt="QR App">
+                </div>
+                <button onclick="openAdmin()" class="bg-red-800 hover:bg-red-900 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition">Přidat</button>
             </div>
         </div>
     </nav>
 
     <header class="max-w-4xl mx-auto p-4 pt-6 text-center">
-        <input type="text" id="searchInput" onkeyup="filterAndSearchCards()" placeholder="Vyhledat kartu..." class="w-full md:w-3/4 p-4 rounded-2xl shadow-md outline-none focus:ring-2 focus:ring-red-400 mb-4 transition">
+        <input type="text" id="searchInput" onkeyup="filterAndSearchCards()" placeholder="Vyhledat kartu nebo klíčové slovo..." class="w-full md:w-3/4 p-4 rounded-2xl shadow-md border border-slate-200 outline-none focus:ring-2 focus:ring-red-400 mb-4 transition">
+        
         <div class="flex gap-2 justify-center overflow-x-auto pb-2 no-scrollbar">
-            <button onclick="filterCards('all', this)" class="filter-btn active bg-red-600 text-white px-5 py-2 rounded-full text-xs font-bold transition">Vše</button>
-            <button onclick="filterCards('deti', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold transition">Děti</button>
-            <button onclick="filterCards('interna', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold transition">Interna</button>
-            <button onclick="filterCards('trauma', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold transition">Trauma</button>
+            <button onclick="filterCards('all', this)" class="filter-btn active bg-red-600 text-white px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Vše</button>
+            <button onclick="filterCards('deti', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Děti</button>
+            <button onclick="filterCards('interna', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Interna</button>
+            <button onclick="filterCards('trauma', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Trauma</button>
         </div>
     </header>
 
     <main class="max-w-4xl mx-auto p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="cardContainer">
-        <div class="col-span-full text-center py-10" id="loadingState"><div class="loader"></div></div>
+        <div class="col-span-full text-center py-10 text-slate-500 font-bold" id="loadingState">
+            <div class="loader mb-3"></div> Načítám databázi...
+        </div>
     </main>
+
+    <div id="adminModal" class="modal">
+        <div class="absolute inset-0 bg-slate-900/80" onclick="closeAll()"></div>
+        <div class="bg-white w-11/12 md:max-w-xl mx-auto rounded-3xl z-[110] overflow-hidden flex flex-col relative shadow-2xl border border-slate-300">
+            <div class="bg-slate-800 text-white p-4 text-center">
+                <h3 id="adminTitle" class="font-bold uppercase text-xs tracking-widest">Editor edukační karty</h3>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+                <input type="hidden" id="editId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Název situace</label>
+                        <input type="text" id="newTitle" class="w-full border p-3 rounded-xl bg-slate-50 text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Kategorie</label>
+                        <select id="newCategory" class="w-full border p-3 rounded-xl bg-slate-50 text-sm font-bold">
+                            <option value="deti">Dětský pacient</option><option value="interna">Interna</option><option value="trauma">Trauma / Úrazy</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Stručný popis</label>
+                    <input type="text" id="newDesc" class="w-full border p-3 rounded-xl bg-slate-50 text-sm">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Klíčová slova (tagy)</label>
+                    <input type="text" id="newTags" placeholder="dušnost, kašel, otok..." class="w-full border p-3 rounded-xl bg-slate-50 text-sm italic">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 text-red-500">Obrázek (schéma/postup)</label>
+                    <input type="file" id="newImageFile" accept="image/*" class="w-full text-xs border-2 border-dashed border-slate-200 p-4 rounded-xl hover:bg-slate-50 cursor-pointer">
+                </div>
+                
+                <div class="bg-slate-100 p-4 rounded-2xl border border-slate-200">
+                    <h4 class="text-[10px] font-black text-slate-500 uppercase mb-3 flex justify-between">
+                        <span>Checklist postupu</span>
+                        <span>Pořadí / Typ</span>
+                    </h4>
+                    <div id="adminStepsList" class="space-y-2"></div>
+                    <div class="flex gap-2 mt-4">
+                        <button onclick="addStepField(false)" class="flex-1 bg-white border border-slate-300 text-slate-600 py-3 rounded-xl text-[10px] font-bold uppercase hover:bg-slate-50 shadow-sm">+ Běžný bod</button>
+                        <button onclick="addStepField(true)" class="flex-1 bg-red-100 border border-red-200 text-red-700 py-3 rounded-xl text-[10px] font-bold uppercase hover:bg-red-200 shadow-sm">+ Kritický bod</button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex border-t border-slate-200">
+                <button onclick="closeAll()" class="w-1/2 p-5 text-xs font-bold uppercase text-slate-400 hover:bg-slate-50">Zrušit</button>
+                <button id="saveBtn" class="w-1/2 p-5 bg-green-600 text-white text-xs font-bold uppercase hover:bg-green-700">Uložit na Cloud</button>
+            </div>
+        </div>
+    </div>
 
     <div id="modal" class="modal">
         <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onclick="closeAll()"></div>
         <div class="bg-white w-11/12 md:max-w-xl mx-auto rounded-3xl shadow-2xl z-[110] overflow-hidden flex flex-col max-h-[90vh] relative">
-            
-            <div id="zzsAlert" class="hidden pulse-red text-white p-4 flex items-center justify-center gap-3 shadow-lg z-[120]">
-                <i class="fas fa-phone-alt animate-bounce"></i>
-                <span class="font-black uppercase tracking-wider text-sm">Kritický stav! Volej 155</span>
-            </div>
-
             <div class="p-8 overflow-y-auto" id="modalContent"></div>
             <button onclick="closeAll()" class="w-full bg-red-600 text-white py-6 font-black uppercase tracking-widest text-sm">Zavřít kartu</button>
         </div>
     </div>
 
-    <div id="adminModal" class="modal">
-        <div class="absolute inset-0 bg-slate-900/80" onclick="closeAll()"></div>
-        <div class="bg-white w-11/12 md:max-w-xl mx-auto rounded-3xl z-[110] overflow-hidden flex flex-col relative shadow-2xl border border-slate-300 text-sm">
-            <div class="bg-slate-800 text-white p-4 text-center"><h3 id="adminTitle" class="font-bold uppercase text-xs tracking-widest">Editor karty</h3></div>
-            <div class="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
-                <input type="hidden" id="editId">
-                <input type="text" id="newTitle" placeholder="Název situace" class="w-full border p-3 rounded-xl bg-slate-50">
-                <select id="newCategory" class="w-full border p-3 rounded-xl bg-slate-50">
-                    <option value="deti">Dětský pacient</option><option value="interna">Interna</option><option value="trauma">Trauma / Úrazy</option>
-                </select>
-                <input type="text" id="newDesc" placeholder="Stručný popis" class="w-full border p-3 rounded-xl bg-slate-50">
-                <input type="text" id="newTags" placeholder="Klíčová slova" class="w-full border p-3 rounded-xl bg-slate-50 text-xs">
-                <input type="file" id="newImageFile" accept="image/*" class="w-full text-xs border border-dashed p-4 rounded-xl">
-                <div class="bg-slate-100 p-4 rounded-2xl">
-                    <div id="adminStepsList" class="space-y-2"></div>
-                    <div class="flex gap-2 mt-4">
-                        <button onclick="addStepField(false)" class="flex-1 bg-white border p-3 rounded-xl text-[10px] font-bold">+ Běžný</button>
-                        <button onclick="addStepField(true)" class="flex-1 bg-red-100 text-red-700 p-3 rounded-xl text-[10px] font-bold">+ Kritický</button>
-                    </div>
-                </div>
-            </div>
-            <div class="flex border-t">
-                <button onclick="closeAll()" class="w-1/2 p-5 text-xs font-bold uppercase text-slate-400">Zrušit</button>
-                <button id="saveBtn" class="w-1/2 p-5 bg-green-600 text-white text-xs font-bold uppercase">Uložit</button>
-            </div>
-        </div>
+    <div id="zoomOverlay" class="modal" onclick="closeZoom()">
+        <div id="zoomImgContainer" class="min-h-screen w-full flex items-center justify-center p-4"></div>
     </div>
-
-    <div id="zoomOverlay" class="modal" onclick="closeZoom()"><div id="zoomImgContainer" class="min-h-screen w-full flex items-center justify-center p-4"></div></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCqHWdTWz5y212jzxmBwKw0oMI3d0Po59I",
@@ -121,112 +134,235 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        const db = initializeFirestore(app, { localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()}) });
-
+        const db = getFirestore(app);
         let myCards = [];
         let currentFilter = 'all';
 
-        // --- ZÁKLADNÍ FUNKCE ---
-        window.closeAll = () => {
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-            document.getElementById('zzsAlert').style.display = 'none';
-            document.body.classList.remove('no-scroll');
-        };
+        const appUrl = window.location.href.split('?')[0];
+        // Vyměněno za spolehlivější quickchart.io
+        document.getElementById('mainAppQr').src = `https://quickchart.io/qr?text=${encodeURIComponent(appUrl)}&size=300`;
 
-        window.zoomImage = (src) => {
-            document.getElementById('zoomImgContainer').innerHTML = `<img src="${src}" class="max-w-full">`;
-            document.getElementById('zoomOverlay').classList.add('active');
-        };
-
-        window.closeZoom = () => document.getElementById('zoomOverlay').classList.remove('active');
-
-        // --- LOGIKA ALERTU 155 ---
-        function updateZzsAlert() {
-            const alertBox = document.getElementById('zzsAlert');
-            const allSteps = document.querySelectorAll('.step-row');
-            
-            let hasCriticalUnfinished = false;
-
-            allSteps.forEach(step => {
-                const isCritical = step.getAttribute('data-critical') === 'true';
-                const isChecked = step.getAttribute('data-checked') === 'true';
-                
-                // Pokud je krok kritický a NENÍ zaškrtnutý, alert musí svítit
-                if (isCritical && !isChecked) {
-                    hasCriticalUnfinished = true;
-                }
-            });
-
-            if (hasCriticalUnfinished) {
-                alertBox.style.display = 'flex';
-            } else {
-                alertBox.style.display = 'none';
+        window.moveStep = (btn, direction) => {
+            const item = btn.closest('.step-item');
+            if (direction === -1 && item.previousElementSibling) {
+                item.parentNode.insertBefore(item, item.previousElementSibling);
+            } else if (direction === 1 && item.nextElementSibling) {
+                item.parentNode.insertBefore(item.nextElementSibling, item);
             }
+        };
+
+        window.addStepField = (isCritical, value = "") => {
+            const list = document.getElementById('adminStepsList');
+            const div = document.createElement('div');
+            div.className = `step-item flex items-center gap-3 p-3 rounded-xl ${isCritical ? 'bg-red-50 border border-red-200' : 'bg-white border border-slate-200'} shadow-sm`;
+            div.dataset.critical = isCritical;
+            div.innerHTML = `
+                <div class="flex flex-col gap-1">
+                    <button onclick="moveStep(this, -1)" class="text-slate-400 hover:text-blue-500"><i class="fas fa-chevron-up text-[10px]"></i></button>
+                    <button onclick="moveStep(this, 1)" class="text-slate-400 hover:text-blue-500"><i class="fas fa-chevron-down text-[10px]"></i></button>
+                </div>
+                <input type="text" value="${value}" placeholder="${isCritical ? 'KRITICKÝ BOD' : 'Krok postupu...'}" class="flex-1 bg-transparent outline-none text-sm font-bold ${isCritical ? 'text-red-700' : 'text-slate-700'}">
+                <button onclick="this.parentElement.remove()" class="text-slate-300 hover:text-red-500 px-2"><i class="fas fa-trash-alt text-xs"></i></button>
+            `;
+            list.appendChild(div);
+        };
+
+        window.loadCards = async function() {
+            try {
+                const querySnapshot = await getDocs(collection(db, "cards"));
+                myCards = [];
+                querySnapshot.forEach(doc => myCards.push({ id: doc.id, ...doc.data() }));
+                filterAndSearchCards();
+            } catch (e) { console.error(e); }
+        };
+
+        function renderGrid(cards) {
+            const container = document.getElementById('cardContainer');
+            container.innerHTML = cards.map(card => `
+                <div class="bg-white rounded-3xl shadow-md border-b-8 border-slate-200 p-6 hover:shadow-xl transition-all duration-300 flex flex-col h-full">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-[10px] font-black uppercase tracking-tighter text-slate-400 bg-slate-100 px-2 py-1 rounded">${card.category || 'Vše'}</span>
+                        <div class="flex gap-4">
+                            <button onclick="editCard('${card.id}')" class="text-slate-300 hover:text-blue-500 transition"><i class="fas fa-edit text-sm"></i></button>
+                            <button onclick="deleteCard('${card.id}')" class="text-slate-300 hover:text-red-500 transition"><i class="fas fa-trash-alt text-sm"></i></button>
+                        </div>
+                    </div>
+                    
+                    ${card.image ? `
+                    <div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 border border-slate-100 shadow-inner">
+                        <img src="${card.image}" class="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity">
+                    </div>` : ''}
+                    
+                    <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 uppercase tracking-tight">${card.title}</h3>
+                    <p class="text-slate-500 text-sm mb-4 line-clamp-2 leading-snug flex-grow">${card.desc || ''}</p>
+                    <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-red-600 transition shadow-lg">Otevřít instrukce</button>
+                </div>
+            `).join('');
+            if(cards.length === 0) container.innerHTML = '<div class="col-span-full text-center py-10 text-slate-400">Žádné karty nenalezeny.</div>';
+            document.getElementById('loadingState').style.display = 'none';
         }
 
-        window.toggleStep = (el) => {
-            const isChecked = el.getAttribute('data-checked') === 'true';
-            const icon = el.querySelector('.fa-check');
-            const checkCircle = el.querySelector('.step-check');
+        window.deleteCard = async id => { if(confirm("Opravdu smazat?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); } };
 
-            if (isChecked) {
-                el.setAttribute('data-checked', 'false');
-                el.style.opacity = "1";
-                icon.classList.replace('scale-100', 'scale-0');
-                checkCircle.classList.remove('bg-green-500', 'border-green-500');
-            } else {
-                el.setAttribute('data-checked', 'true');
-                el.style.opacity = "0.4";
-                icon.classList.replace('scale-0', 'scale-100');
-                checkCircle.classList.add('bg-green-500', 'border-green-500');
-            }
+        window.editCard = id => {
+            const card = myCards.find(c => c.id === id);
+            document.getElementById('editId').value = id;
+            document.getElementById('adminTitle').innerText = "Úprava: " + card.title;
+            document.getElementById('newTitle').value = card.title;
+            document.getElementById('newCategory').value = card.category;
+            document.getElementById('newDesc').value = card.desc || "";
+            document.getElementById('newTags').value = card.tags ? card.tags.join(', ') : '';
+            document.getElementById('newImageFile').value = "";
+            document.getElementById('adminStepsList').innerHTML = "";
+            const steps = card.steps_v2 || [];
+            steps.forEach(s => addStepField(s.critical, s.text));
+            document.getElementById('adminModal').classList.add('active');
+            document.body.classList.add('no-scroll');
+        };
+
+        document.getElementById('saveBtn').onclick = async () => {
+            const btn = document.getElementById('saveBtn');
+            const editId = document.getElementById('editId').value;
+            const fileInput = document.getElementById('newImageFile');
             
-            updateZzsAlert();
+            try {
+                btn.disabled = true; btn.innerText = "Ukládám...";
+
+                const steps_v2 = Array.from(document.querySelectorAll('#adminStepsList > .step-item')).map(el => ({
+                    text: el.querySelector('input').value,
+                    critical: el.dataset.critical === "true"
+                }));
+
+                const data = {
+                    title: document.getElementById('newTitle').value,
+                    category: document.getElementById('newCategory').value,
+                    desc: document.getElementById('newDesc').value,
+                    tags: document.getElementById('newTags').value.toLowerCase().split(',').map(t => t.trim()).filter(t => t !== ''),
+                    steps_v2: steps_v2
+                };
+
+                if (fileInput.files[0]) {
+                    data.image = await new Promise(res => {
+                        const r = new FileReader();
+                        r.onload = e => {
+                            const i = new Image();
+                            i.onload = () => {
+                                const c = document.createElement('canvas');
+                                let w = i.width; if(w > 800) w = 800;
+                                let h = (i.height * w) / i.width;
+                                c.width = w; c.height = h;
+                                c.getContext('2d').drawImage(i, 0, 0, w, h);
+                                res(c.toDataURL('image/jpeg', 0.5));
+                            };
+                            i.src = e.target.result;
+                        };
+                        r.readAsDataURL(fileInput.files[0]);
+                    });
+                }
+
+                // Zjednodušení: už neukládáme QR kód do databáze, šetříme tak místo i zapisování
+                if (editId) {
+                    await updateDoc(doc(db, "cards", editId), data);
+                } else {
+                    await addDoc(collection(db, "cards"), data);
+                }
+                location.reload();
+            } catch (err) {
+                alert("Chyba: " + err.message);
+                btn.disabled = false; btn.innerText = "Uložit na Cloud";
+            }
+        };
+
+        window.checkCritical = () => {
+            const alertBox = document.getElementById('zzsAlert');
+            const anyCriticalChecked = Array.from(document.querySelectorAll('.critical-check')).some(c => c.checked);
+            if (anyCriticalChecked) { alertBox.classList.remove('hidden'); alertBox.classList.add('flex'); }
+            else { alertBox.classList.add('hidden'); alertBox.classList.remove('flex'); }
         };
 
         window.openCard = id => {
             const card = myCards.find(c => c.id === id);
             const steps = card.steps_v2 || [];
             
+            // DYNAMICKÉ VYTVOŘENÍ QR KÓDU - Místo uložení v databázi ho generujeme naživo z URL adresy
+            const cardUrl = window.location.href.split('?')[0] + "?id=" + card.id;
+            const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(cardUrl)}&size=300`;
+
             document.getElementById('modalContent').innerHTML = `
-                <div class="mb-6">
-                    <h2 class="text-3xl font-black text-slate-800 uppercase leading-tight">${card.title}</h2>
-                    <p class="text-slate-400 font-bold uppercase text-xs">${card.category || ''}</p>
+                <div class="flex justify-between items-start mb-6">
+                    <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
+                    <div class="bg-slate-100 p-2 rounded-xl border border-slate-200 shrink-0 ml-4">
+                        <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-80 cursor-zoom-in" onclick="zoomImage('${dynamicQrUrl}')">
+                    </div>
                 </div>
-                ${card.image ? `<img src="${card.image}" class="w-full rounded-2xl mb-6 shadow-lg border-4 border-white" onclick="zoomImage(this.src)">` : ''}
-                <div class="space-y-3" id="stepsList">
+                ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-xl mb-8 border-4 border-white cursor-zoom-in" onclick="zoomImage('${card.image}')">` : ''}
+                <div class="space-y-4 pb-6">
                     ${steps.map(s => `
-                        <div onclick="toggleStep(this)" 
-                             data-critical="${s.critical}" 
-                             data-checked="false" 
-                             class="step-row cursor-pointer flex items-center gap-4 p-5 rounded-2xl border-2 transition-all ${s.critical ? 'bg-red-50 border-red-100 text-red-900' : 'bg-white border-slate-100 text-slate-700'}">
-                            <div class="step-check w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${s.critical ? 'border-red-200' : 'border-slate-200'}">
-                                <i class="fas fa-check text-white scale-0 transition-transform"></i>
+                        <label class="flex items-center gap-5 p-5 ${s.critical ? 'bg-red-50 border-2 border-red-200' : 'bg-slate-50 border border-slate-200'} rounded-3xl active:scale-95 transition-all cursor-pointer shadow-sm">
+                            <input type="checkbox" onchange="checkCritical()" class="w-8 h-8 accent-red-600 rounded-xl ${s.critical ? 'critical-check' : ''}">
+                            <div class="flex-1">
+                                ${s.critical ? '<span class="block text-[10px] font-black text-red-600 uppercase tracking-widest mb-1 italic">Kritické ohrožení života!</span>' : ''}
+                                <span class="text-lg font-bold ${s.critical ? 'text-red-900' : 'text-slate-700'} leading-snug">${s.text}</span>
                             </div>
-                            <p class="font-bold text-lg leading-tight flex-1">${s.text}</p>
-                        </div>
+                        </label>
                     `).join('')}
+                </div>
+                <div id="zzsAlert" class="hidden p-8 bg-red-600 text-white rounded-3xl text-center mb-6 pulse-alert flex-col items-center gap-3">
+                    <i class="fas fa-phone-alt text-4xl animate-bounce"></i>
+                    <h3 class="text-2xl font-black uppercase tracking-widest">Volejte 155!</h3>
                 </div>
             `;
             document.getElementById('modal').classList.add('active');
             document.body.classList.add('no-scroll');
-            
-            // Kontrola hned po otevření
-            updateZzsAlert();
         };
 
-        // --- OSTATNÍ LOGIKA (Admin, Filtry, Firebase) ---
-        window.filterCards = (cat, btn) => {
+        window.zoomImage = src => { document.getElementById('zoomImgContainer').innerHTML = `<img src="${src}" class="rounded-xl">`; document.getElementById('zoomOverlay').classList.add('active'); };
+        window.closeZoom = () => document.getElementById('zoomOverlay').classList.remove('active');
+        window.closeAll = () => { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); document.body.classList.remove('no-scroll'); };
+        
+        window.openAdmin = () => { 
+            document.getElementById('editId').value = ""; 
+            document.getElementById('adminTitle').innerText = "Nová edukační karta";
+            document.getElementById('newTitle').value = "";
+            document.getElementById('newDesc').value = "";
+            document.getElementById('newTags').value = "";
+            document.getElementById('newImageFile').value = "";
+            document.getElementById('adminStepsList').innerHTML = "";
+            addStepField(false);
+            document.getElementById('adminModal').classList.add('active'); 
+            document.body.classList.add('no-scroll');
+        };
+
+        window.filterAndSearchCards = function() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            let filtered = myCards;
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(c => c.category === currentFilter);
+            }
+            if (term) {
+                filtered = filtered.filter(c => 
+                    c.title.toLowerCase().includes(term) || 
+                    (c.tags && c.tags.some(t => t.includes(term))) ||
+                    (c.desc && c.desc.toLowerCase().includes(term))
+                );
+            }
+            renderGrid(filtered);
+        };
+
+        window.filterCards = function(cat, btn) {
             currentFilter = cat;
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'bg-red-600', 'text-white'));
+            document.querySelectorAll('.filter-btn').forEach(b => { 
+                b.classList.remove('active', 'bg-red-600', 'text-white'); 
+                b.classList.add('bg-white', 'text-slate-600'); 
+            });
             btn.classList.add('active', 'bg-red-600', 'text-white');
+            btn.classList.remove('bg-white', 'text-slate-600');
             filterAndSearchCards();
         };
 
-        window.filterAndSearchCards = () => {
-            const q = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = myCards.filter(c => {
-                const mCat = currentFilter === 'all' || c.category === currentFilter;
-                const mSearch = c.title.toLowerCase().includes(q) || (c.tags && c.tags.some(t => t.includes(q)));
-                return mCat && mSearch;
-            });
+        const params = new URLSearchParams(window.location.search);
+        if(params.get('id')) loadCards().then(() => openCard(params.get('id')));
+        else loadCards();
+    </script>
+</body>
+</html>
