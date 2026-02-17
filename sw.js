@@ -1,30 +1,28 @@
-const CACHE_NAME = 'rescuecards-v2'; // Verze 2
+const CACHE_NAME = 'rescuecards-v3';
 
-// Rychlá instalace
-self.addEventListener('install', event => {
+self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', event => {
-  event.waitUntil(clients.claim());
+self.addEventListener('activate', e => {
+  e.waitUntil(clients.claim());
 });
 
-// Chytřejší ukládání: Cokoliv appka načte, to si uloží i pro offline použití
-self.addEventListener('fetch', event => {
-  // Ignorujeme složité požadavky databáze, chceme jen obrázky, skripty a styly
-  if (event.request.method !== 'GET') return;
+// CHYTRÁ STRATEGIE: Nejdřív zkusí internet. Když to nejde, ukáže zálohu.
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
 
-  event.respondWith(
-    fetch(event.request)
+  e.respondWith(
+    fetch(e.request)
       .then(response => {
-        // Zkopírujeme odpověď a uložíme do mezipaměti
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, responseClone);
-        });
+        // Máme internet! Uložíme si novou kopii pro případ výpadku.
+        const resClone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, resClone));
         return response;
       })
-      // Pokud nemáme internet, sáhneme do mezipaměti
-      .catch(() => caches.match(event.request))
+      .catch(() => {
+        // Nemáme internet (nebo GitHub neodpovídá)! Sáhneme do batohu.
+        return caches.match(e.request);
+      })
   );
 });
