@@ -39,6 +39,11 @@
                 <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="Sdílet aplikaci" onclick="zoomImage(document.getElementById('mainAppQr').src)">
                     <img id="mainAppQr" class="w-8 h-8" alt="QR App">
                 </div>
+                
+                <button id="installAppBtn" class="hidden bg-blue-600 hover:bg-blue-700 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition shadow-lg">
+                    <i class="fas fa-download mr-1"></i> Stáhnout
+                </button>
+                
                 <button onclick="openAdmin()" class="bg-red-800 hover:bg-red-900 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition">Přidat</button>
             </div>
         </div>
@@ -127,7 +132,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        // PWA: Nové importy pro offline cache
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -140,8 +144,6 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        
-        // PWA: Zapnutí offline databáze Firestore
         const db = initializeFirestore(app, {
             localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
         });
@@ -149,14 +151,40 @@
         let myCards = [];
         let currentFilter = 'all';
 
-        // PWA: Registrace Service Workera (Skladníka)
+        // PWA: Registrace Skladníka
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('Offline režim aktivován!'))
-                    .catch(err => console.error('Chyba offline režimu:', err));
+                    .then(reg => console.log('Offline připraveno'))
+                    .catch(err => console.error(err));
             });
         }
+
+        // --- PWA: LOGIKA PRO TLAČÍTKO "STÁHNOUT APPKU" ---
+        let deferredPrompt;
+        const installBtn = document.getElementById('installAppBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault(); // Zabránit výchozí vyskakovací liště, aby se ukázalo naše modré tlačítko
+            deferredPrompt = e;
+            installBtn.classList.remove('hidden'); // Ukázat tlačítko na instalaci
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBtn.classList.add('hidden'); // Schovat, pokud uživatel potvrdil instalaci
+                }
+                deferredPrompt = null;
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            installBtn.classList.add('hidden'); // Skrýt navždy, pokud už je nainstalováno
+        });
+        // --------------------------------------------------
 
         const appUrl = window.location.href.split('?')[0];
         document.getElementById('mainAppQr').src = `https://quickchart.io/qr?text=${encodeURIComponent(appUrl)}&size=300`;
@@ -188,7 +216,6 @@
 
         window.loadCards = async function() {
             try {
-                // Díky offline cache se data načtou i bez internetu!
                 const querySnapshot = await getDocs(collection(db, "cards"));
                 myCards = [];
                 querySnapshot.forEach(doc => myCards.push({ id: doc.id, ...doc.data() }));
