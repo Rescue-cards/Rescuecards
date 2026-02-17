@@ -34,7 +34,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Ochrana proti nechtěnému označování textu a menu v ostrém provozu */
+        /* Ochrana proti nechtěnému označování textu v detailu karty */
         #modalContent {
             user-select: none;
             -webkit-user-select: none;
@@ -57,7 +57,7 @@
                 <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="QR kód aplikace" onclick="zoomImage(document.getElementById('mainAppQr').src)">
                     <img id="mainAppQr" class="w-8 h-8" alt="QR App">
                 </div>
-                <button onclick="openAdmin()" class="bg-red-800 hover:bg-red-900 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition">Administrace</button>
+                <button onclick="openAdmin()" class="bg-red-800 hover:bg-red-900 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition">Přidat kartu</button>
             </div>
         </div>
     </nav>
@@ -232,10 +232,8 @@
             }
         };
 
-        // --- ADMINISTRACE ---
+        // --- ADMINISTRACE (Editor otevřen přímo bez hesla) ---
         window.openAdmin = () => {
-            const pass = prompt("Heslo:");
-            if(pass !== "1234") return; // Jednoduché heslo pro začátek
             document.getElementById('editId').value = "";
             document.getElementById('adminTitle').innerText = "Nová karta";
             document.getElementById('newTitle').value = "";
@@ -298,7 +296,7 @@
             if(document.getElementById('loadingState')) document.getElementById('loadingState').style.display = 'none';
         }
 
-        window.deleteCard = async id => { if(confirm("Smazat?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); } };
+        window.deleteCard = async id => { if(confirm("Opravdu smazat tuto kartu?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); } };
 
         window.editCard = id => {
             const card = myCards.find(c => c.id === id);
@@ -361,7 +359,7 @@
                 loadCards();
                 btn.disabled = false; btn.innerText = "Uložit";
             } catch (err) {
-                alert("Chyba: " + err.message);
+                alert("Chyba při ukládání: " + err.message);
                 btn.disabled = false; btn.innerText = "Uložit";
             }
         };
@@ -393,7 +391,7 @@
                     deferredPrompt = null;
                 }
             } else {
-                alert("Pro instalaci na iPhone použij tlačítko 'Sdílet' a pak 'Přidat na plochu'.");
+                alert("Pro instalaci na iPhone: klepněte na tlačítko sdílení (čtvereček se šipkou) a zvolte 'Přidat na plochu'.");
             }
         });
 
