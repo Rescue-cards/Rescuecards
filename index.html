@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>RescueCards | Final MVP</title>
+    <title>RescueCards | Offline PWA</title>
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#dc2626">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/803/803087.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -122,7 +127,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        // PWA: Nové importy pro offline cache
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCqHWdTWz5y212jzxmBwKw0oMI3d0Po59I",
@@ -134,12 +140,25 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        
+        // PWA: Zapnutí offline databáze Firestore
+        const db = initializeFirestore(app, {
+            localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
+        });
+
         let myCards = [];
         let currentFilter = 'all';
 
+        // PWA: Registrace Service Workera (Skladníka)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Offline režim aktivován!'))
+                    .catch(err => console.error('Chyba offline režimu:', err));
+            });
+        }
+
         const appUrl = window.location.href.split('?')[0];
-        // Vyměněno za spolehlivější quickchart.io
         document.getElementById('mainAppQr').src = `https://quickchart.io/qr?text=${encodeURIComponent(appUrl)}&size=300`;
 
         window.moveStep = (btn, direction) => {
@@ -169,6 +188,7 @@
 
         window.loadCards = async function() {
             try {
+                // Díky offline cache se data načtou i bez internetu!
                 const querySnapshot = await getDocs(collection(db, "cards"));
                 myCards = [];
                 querySnapshot.forEach(doc => myCards.push({ id: doc.id, ...doc.data() }));
@@ -260,7 +280,6 @@
                     });
                 }
 
-                // Zjednodušení: už neukládáme QR kód do databáze, šetříme tak místo i zapisování
                 if (editId) {
                     await updateDoc(doc(db, "cards", editId), data);
                 } else {
@@ -284,7 +303,6 @@
             const card = myCards.find(c => c.id === id);
             const steps = card.steps_v2 || [];
             
-            // DYNAMICKÉ VYTVOŘENÍ QR KÓDU - Místo uložení v databázi ho generujeme naživo z URL adresy
             const cardUrl = window.location.href.split('?')[0] + "?id=" + card.id;
             const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(cardUrl)}&size=300`;
 
@@ -299,10 +317,10 @@
                 <div class="space-y-4 pb-6">
                     ${steps.map(s => `
                         <label class="flex items-center gap-5 p-5 ${s.critical ? 'bg-red-50 border-2 border-red-200' : 'bg-slate-50 border border-slate-200'} rounded-3xl active:scale-95 transition-all cursor-pointer shadow-sm">
-                            <input type="checkbox" onchange="checkCritical()" class="w-8 h-8 accent-red-600 rounded-xl ${s.critical ? 'critical-check' : ''}">
+                            <input type="checkbox" onchange="checkCritical()" class="w-6 h-6 sm:w-8 sm:h-8 accent-red-600 rounded-xl ${s.critical ? 'critical-check' : ''}">
                             <div class="flex-1">
                                 ${s.critical ? '<span class="block text-[10px] font-black text-red-600 uppercase tracking-widest mb-1 italic">Kritické ohrožení života!</span>' : ''}
-                                <span class="text-lg font-bold ${s.critical ? 'text-red-900' : 'text-slate-700'} leading-snug">${s.text}</span>
+                                <span class="text-base sm:text-lg font-bold ${s.critical ? 'text-red-900' : 'text-slate-700'} leading-snug">${s.text}</span>
                             </div>
                         </label>
                     `).join('')}
@@ -360,9 +378,7 @@
             filterAndSearchCards();
         };
 
-        const params = new URLSearchParams(window.location.search);
-        if(params.get('id')) loadCards().then(() => openCard(params.get('id')));
-        else loadCards();
+        window.loadCards();
     </script>
 </body>
 </html>
