@@ -136,45 +136,49 @@
         let myCards = [];
         let currentFilter = 'all';
 
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
+        // Globální funkce pro UI
+        window.closeAll = () => {
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            document.body.classList.remove('no-scroll');
+        };
+
+        window.openAdmin = () => {
+            document.getElementById('editId').value = "";
+            document.getElementById('adminTitle').innerText = "Nová karta";
+            document.getElementById('newTitle').value = "";
+            document.getElementById('newDesc').value = "";
+            document.getElementById('newTags').value = "";
+            document.getElementById('adminStepsList').innerHTML = "";
+            document.getElementById('adminModal').classList.add('active');
+            document.body.classList.add('no-scroll');
+        };
+
+        window.zoomImage = (src) => {
+            document.getElementById('zoomImgContainer').innerHTML = `<img src="${src}" onclick="event.stopPropagation()">`;
+            document.getElementById('zoomOverlay').classList.add('active');
+        };
+
+        window.closeZoom = () => document.getElementById('zoomOverlay').classList.remove('active');
+
+        window.filterCards = (cat, btn) => {
+            currentFilter = cat;
+            document.querySelectorAll('.filter-btn').forEach(b => {
+                b.classList.remove('active', 'bg-red-600', 'text-white');
+                b.classList.add('bg-white', 'text-slate-600');
             });
-        }
+            btn.classList.add('active', 'bg-red-600', 'text-white');
+            filterAndSearchCards();
+        };
 
-        let deferredPrompt;
-        const logoHeart = document.getElementById('logoHeart');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            logoHeart.classList.add('install-ready');
-        });
-
-        logoHeart.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    logoHeart.classList.remove('install-ready');
-                    deferredPrompt = null;
-                }
-            } else {
-                logoHeart.style.transform = "scale(1.4)";
-                setTimeout(() => logoHeart.style.transform = "scale(1)", 200);
-            }
-        });
-
-        const appUrl = window.location.href.split('?')[0];
-        document.getElementById('mainAppQr').src = `https://quickchart.io/qr?text=${encodeURIComponent(appUrl)}&size=300`;
-
-        window.moveStep = (btn, direction) => {
-            const item = btn.closest('.step-item');
-            if (direction === -1 && item.previousElementSibling) {
-                item.parentNode.insertBefore(item, item.previousElementSibling);
-            } else if (direction === 1 && item.nextElementSibling) {
-                item.parentNode.insertBefore(item.nextElementSibling, item);
-            }
+        window.filterAndSearchCards = () => {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = myCards.filter(c => {
+                const matchesCat = currentFilter === 'all' || c.category === currentFilter;
+                const matchesSearch = c.title.toLowerCase().includes(query) || 
+                                    (c.tags && c.tags.some(t => t.includes(query)));
+                return matchesCat && matchesSearch;
+            });
+            renderGrid(filtered);
         };
 
         window.addStepField = (isCritical, value = "") => {
@@ -193,6 +197,16 @@
             list.appendChild(div);
         };
 
+        window.moveStep = (btn, direction) => {
+            const item = btn.closest('.step-item');
+            if (direction === -1 && item.previousElementSibling) {
+                item.parentNode.insertBefore(item, item.previousElementSibling);
+            } else if (direction === 1 && item.nextElementSibling) {
+                item.parentNode.insertBefore(item.nextElementSibling, item);
+            }
+        };
+
+        // Firebase logika
         window.loadCards = async function() {
             try {
                 const querySnapshot = await getDocs(collection(db, "cards"));
@@ -204,13 +218,17 @@
 
         function renderGrid(cards) {
             const container = document.getElementById('cardContainer');
+            if (cards.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center py-10 text-slate-400">Žádné karty nenalezeny.</div>`;
+                return;
+            }
             container.innerHTML = cards.map(card => `
                 <div class="bg-white rounded-3xl shadow-md border-b-8 border-slate-200 p-6 flex flex-col h-full">
                     <div class="flex justify-between items-center mb-4">
                         <span class="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded">${card.category || 'Vše'}</span>
                         <div class="flex gap-4">
-                            <button onclick="editCard('${card.id}')" class="text-slate-300"><i class="fas fa-edit text-sm"></i></button>
-                            <button onclick="deleteCard('${card.id}')" class="text-slate-300"><i class="fas fa-trash-alt text-sm"></i></button>
+                            <button onclick="editCard('${card.id}')" class="text-slate-300 hover:text-blue-500"><i class="fas fa-edit text-sm"></i></button>
+                            <button onclick="deleteCard('${card.id}')" class="text-slate-300 hover:text-red-500"><i class="fas fa-trash-alt text-sm"></i></button>
                         </div>
                     </div>
                     ${card.image ? `<div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 border border-slate-100 shadow-inner"><img src="${card.image}" class="w-full h-full object-cover"></div>` : ''}
@@ -219,10 +237,11 @@
                     <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-red-600 transition shadow-lg">Otevřít</button>
                 </div>
             `).join('');
-            document.getElementById('loadingState').style.display = 'none';
+            const loader = document.getElementById('loadingState');
+            if(loader) loader.style.display = 'none';
         }
 
-        window.deleteCard = async id => { if(confirm("Smazat?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); } };
+        window.deleteCard = async id => { if(confirm("Opravdu smazat?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); } };
 
         window.editCard = id => {
             const card = myCards.find(c => c.id === id);
@@ -236,6 +255,33 @@
             const steps = card.steps_v2 || [];
             steps.forEach(s => addStepField(s.critical, s.text));
             document.getElementById('adminModal').classList.add('active');
+            document.body.classList.add('no-scroll');
+        };
+
+        window.openCard = id => {
+            const card = myCards.find(c => c.id === id);
+            const steps = card.steps_v2 || [];
+            const cardUrl = window.location.href.split('?')[0] + "?id=" + card.id;
+            const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(cardUrl)}&size=300`;
+            
+            document.getElementById('modalContent').innerHTML = `
+                <div class="flex justify-between items-start mb-6">
+                    <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
+                    <div class="bg-slate-100 p-2 rounded-xl border border-slate-200 shrink-0 ml-4">
+                        <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-80 cursor-zoom-in" onclick="zoomImage('${dynamicQrUrl}')">
+                    </div>
+                </div>
+                ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-xl mb-8 border-4 border-white cursor-zoom-in" onclick="zoomImage('${card.image}')">` : ''}
+                <div class="space-y-4 pb-6">
+                    ${steps.map((s, index) => `
+                        <div class="flex items-start gap-4 p-4 rounded-2xl border ${s.critical ? 'bg-red-50 border-red-200 text-red-900' : 'bg-slate-50 border-slate-100'}">
+                            <span class="font-black text-lg opacity-30">${index + 1}</span>
+                            <p class="font-bold leading-tight">${s.text}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            document.getElementById('modal').classList.add('active');
             document.body.classList.add('no-scroll');
         };
 
@@ -256,6 +302,7 @@
                     tags: document.getElementById('newTags').value.toLowerCase().split(',').map(t => t.trim()).filter(t => t !== ''),
                     steps_v2: steps_v2
                 };
+                
                 if (fileInput.files[0]) {
                     data.image = await new Promise(res => {
                         const r = new FileReader();
@@ -273,36 +320,33 @@
                         };
                         r.readAsDataURL(fileInput.files[0]);
                     });
+                } else if (editId) {
+                    const old = myCards.find(c => c.id === editId);
+                    if(old.image) data.image = old.image;
                 }
+
                 if (editId) await updateDoc(doc(db, "cards", editId), data);
                 else await addDoc(collection(db, "cards"), data);
-                location.reload();
+                
+                closeAll();
+                loadCards();
+                btn.disabled = false; btn.innerText = "Uložit";
             } catch (err) {
                 alert("Chyba: " + err.message);
                 btn.disabled = false; btn.innerText = "Uložit";
             }
         };
 
-        window.checkCritical = () => {
-            const alertBox = document.getElementById('zzsAlert');
-            const anyCriticalChecked = Array.from(document.querySelectorAll('.critical-check')).some(c => c.checked);
-            if (anyCriticalChecked) { alertBox.classList.remove('hidden'); alertBox.classList.add('flex'); }
-            else { alertBox.classList.add('hidden'); alertBox.classList.remove('flex'); }
-        };
+        // PWA a inicializace
+        window.addEventListener('load', () => {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
+            }
+            const appUrl = window.location.href.split('?')[0];
+            document.getElementById('mainAppQr').src = `https://quickchart.io/qr?text=${encodeURIComponent(appUrl)}&size=300`;
+            loadCards();
+        });
 
-        window.openCard = id => {
-            const card = myCards.find(c => c.id === id);
-            const steps = card.steps_v2 || [];
-            const cardUrl = window.location.href.split('?')[0] + "?id=" + card.id;
-            const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(cardUrl)}&size=300`;
-            document.getElementById('modalContent').innerHTML = `
-                <div class="flex justify-between items-start mb-6">
-                    <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
-                    <div class="bg-slate-100 p-2 rounded-xl border border-slate-200 shrink-0 ml-4">
-                        <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-80 cursor-zoom-in" onclick="zoomImage('${dynamicQrUrl}')">
-                    </div>
-                </div>
-                ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-xl mb-8 border-4 border-white cursor-zoom-in" onclick="zoomImage('${card.image}')">` : ''}
-                <div class="space-y-4 pb-6">
-                    ${steps.map(s => `
-                        <label class="flex items-center gap-5 p-5 ${s.
+    </script>
+</body>
+</html>
