@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>RescueCards | Pro Hub</title>
     
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#dc2626">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/803/803087.png">
@@ -22,7 +24,6 @@
         .pulse-alert { animation: alert-pulse 1s infinite; border: 4px solid white; }
         @keyframes alert-pulse { 0% { transform: scale(1); background-color: #dc2626; } 50% { transform: scale(1.02); background-color: #b91c1c; } 100% { transform: scale(1); background-color: #dc2626; } }
         
-        /* Animace pro srdce, když je appka připravená k instalaci */
         .install-ready { animation: heart-beat 1.5s infinite; cursor: pointer; color: #fee2e2; }
         @keyframes heart-beat {
             0% { transform: scale(1); }
@@ -35,6 +36,10 @@
         .step-item { transition: all 0.2s; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Styl pro export - skryje prvky, které nechceme na fotce */
+        .screenshot-mode .no-export { display: none !important; }
+        .screenshot-mode { padding: 20px !important; background: white !important; }
     </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-900">
@@ -46,7 +51,6 @@
                 <span class="hidden sm:inline">RescueCards Hub</span>
                 <span class="sm:hidden">RescueCards</span>
             </h1>
-            
             <div class="flex items-center gap-2 sm:gap-4 shrink-0">
                 <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="Sdílet aplikaci" onclick="zoomImage(document.getElementById('mainAppQr').src)">
                     <img id="mainAppQr" class="w-8 h-8" alt="QR App">
@@ -107,9 +111,15 @@
 
     <div id="modal" class="modal">
         <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onclick="closeAll()"></div>
-        <div class="bg-white w-11/12 md:max-w-xl mx-auto rounded-3xl shadow-2xl z-[110] overflow-hidden flex flex-col max-h-[90vh] relative">
+        <div id="modalCaptureArea" class="bg-white w-11/12 md:max-w-xl mx-auto rounded-3xl shadow-2xl z-[110] overflow-hidden flex flex-col max-h-[90vh] relative">
             <div class="p-8 overflow-y-auto" id="modalContent"></div>
-            <button onclick="closeAll()" class="w-full bg-red-600 text-white py-6 font-black uppercase tracking-widest text-sm">Zavřít kartu</button>
+            
+            <div class="flex border-t no-export">
+                <button onclick="downloadCardAsImage()" class="w-1/4 bg-slate-100 text-slate-600 py-6 border-r border-slate-200 hover:bg-slate-200 transition">
+                    <i class="fas fa-camera text-xl"></i>
+                </button>
+                <button onclick="closeAll()" class="w-3/4 bg-red-600 text-white py-6 font-black uppercase tracking-widest text-sm">Zavřít kartu</button>
+            </div>
         </div>
     </div>
 
@@ -138,21 +148,18 @@
         let myCards = [];
         let currentFilter = 'all';
 
-        // PWA: Registrace Service Workeru
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
             });
         }
 
-        // --- PWA: INSTALACE SCHOVANÁ POD SRDCEM ---
         let deferredPrompt;
         const logoHeart = document.getElementById('logoHeart');
 
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            // Aktivovat "tlukot" srdce, když je appka připravená ke stažení
             logoHeart.classList.add('install-ready');
         });
 
@@ -165,15 +172,34 @@
                     deferredPrompt = null;
                 }
             } else {
-                // Pokud to není k instalaci, srdce aspoň lehce pulzne na pozdrav
                 logoHeart.style.transform = "scale(1.4)";
                 setTimeout(() => logoHeart.style.transform = "scale(1)", 200);
             }
         });
-        // ------------------------------------------
 
         const appUrl = window.location.href.split('?')[0];
         document.getElementById('mainAppQr').src = `https://quickchart.io/qr?text=${encodeURIComponent(appUrl)}&size=300`;
+
+        // --- FUNKCE PRO SCREENSHOT (PŘIDÁNO) ---
+        window.downloadCardAsImage = function() {
+            const area = document.getElementById('modalCaptureArea');
+            const originalTitle = document.querySelector('#modalContent h2').innerText;
+            
+            // Dočasně přidáme třídu pro čistý export
+            area.classList.add('screenshot-mode');
+            
+            html2canvas(area, {
+                useCORS: true, // Důležité pro načtení obrázků z cloudu
+                scale: 2,      // Vyšší kvalita
+                backgroundColor: "#ffffff"
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `RescueCard-${originalTitle}.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                area.classList.remove('screenshot-mode');
+            });
+        };
 
         window.moveStep = (btn, direction) => {
             const item = btn.closest('.step-item');
@@ -190,12 +216,12 @@
             div.className = `step-item flex items-center gap-3 p-3 rounded-xl ${isCritical ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'} border shadow-sm`;
             div.dataset.critical = isCritical;
             div.innerHTML = `
-                <div class="flex flex-col gap-1">
+                <div class="flex flex-col gap-1 no-export">
                     <button onclick="moveStep(this, -1)" class="text-slate-400"><i class="fas fa-chevron-up text-[10px]"></i></button>
                     <button onclick="moveStep(this, 1)" class="text-slate-400"><i class="fas fa-chevron-down text-[10px]"></i></button>
                 </div>
                 <input type="text" value="${value}" class="flex-1 bg-transparent outline-none text-sm font-bold ${isCritical ? 'text-red-700' : 'text-slate-700'}">
-                <button onclick="this.parentElement.remove()" class="text-slate-300 px-2"><i class="fas fa-trash-alt text-xs"></i></button>
+                <button onclick="this.parentElement.remove()" class="text-slate-300 px-2 no-export"><i class="fas fa-trash-alt text-xs"></i></button>
             `;
             list.appendChild(div);
         };
@@ -305,7 +331,7 @@
             document.getElementById('modalContent').innerHTML = `
                 <div class="flex justify-between items-start mb-6">
                     <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
-                    <div class="bg-slate-100 p-2 rounded-xl border border-slate-200 shrink-0 ml-4">
+                    <div class="bg-slate-100 p-2 rounded-xl border border-slate-200 shrink-0 ml-4 no-export">
                         <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-80 cursor-zoom-in" onclick="zoomImage('${dynamicQrUrl}')">
                     </div>
                 </div>
@@ -313,7 +339,7 @@
                 <div class="space-y-4 pb-6">
                     ${steps.map(s => `
                         <label class="flex items-center gap-5 p-5 ${s.critical ? 'bg-red-50 border-2 border-red-200' : 'bg-slate-50 border border-slate-200'} rounded-3xl active:scale-95 transition-all cursor-pointer shadow-sm">
-                            <input type="checkbox" onchange="checkCritical()" class="w-8 h-8 accent-red-600 rounded-xl ${s.critical ? 'critical-check' : ''}">
+                            <input type="checkbox" onchange="checkCritical()" class="w-8 h-8 accent-red-600 rounded-xl ${s.critical ? 'critical-check' : ''} no-export">
                             <div class="flex-1">
                                 ${s.critical ? '<span class="block text-[10px] font-black text-red-600 uppercase tracking-widest mb-1 italic">Kritické ohrožení života!</span>' : ''}
                                 <span class="text-lg font-bold ${s.critical ? 'text-red-900' : 'text-slate-700'} leading-snug">${s.text}</span>
