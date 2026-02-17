@@ -31,7 +31,7 @@
                 <span class="sm:hidden">RescueCards</span>
             </h1>
             <div class="flex items-center gap-2 sm:gap-4 shrink-0">
-                <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="Sdílet aplikaci">
+                <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="Sdílet aplikaci" onclick="zoomImage(document.getElementById('mainAppQr').src)">
                     <img id="mainAppQr" class="w-8 h-8" alt="QR App">
                 </div>
                 <button onclick="openAdmin()" class="bg-red-800 hover:bg-red-900 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition">Přidat</button>
@@ -211,7 +211,7 @@
             document.getElementById('newCategory').value = card.category;
             document.getElementById('newDesc').value = card.desc || "";
             document.getElementById('newTags').value = card.tags ? card.tags.join(', ') : '';
-            document.getElementById('newImageFile').value = ""; // Vždy vyčistit input pro soubor
+            document.getElementById('newImageFile').value = "";
             document.getElementById('adminStepsList').innerHTML = "";
             const steps = card.steps_v2 || [];
             steps.forEach(s => addStepField(s.critical, s.text));
