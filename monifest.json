@@ -1,0 +1,16 @@
+{
+  "name": "RescueCards Hub",
+  "short_name": "RescueCards",
+  "description": "Edukační a záchranářské karty do kapsy.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#dc2626",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/803/803087.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
