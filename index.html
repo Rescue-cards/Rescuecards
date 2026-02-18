@@ -129,6 +129,11 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        
+        // --- KONFIGURACE ---
+        const ADMIN_PASSWORD = "1234"; // ZDE SI ZMĚŇ HESLO
+        // -------------------
+
         let myCards = [];
         let currentFilter = 'all';
 
@@ -163,156 +168,4 @@
                     <button onclick="moveStep(this, 1)" class="text-slate-300 hover:text-blue-500"><i class="fas fa-chevron-down text-[10px]"></i></button>
                 </div>
                 <input type="text" value="${value}" placeholder="Krok postupu..." class="flex-1 bg-transparent outline-none text-sm font-bold ${isCritical ? 'text-red-700' : 'text-slate-700'}">
-                <button onclick="this.parentElement.remove()" class="text-slate-300 hover:text-red-500"><i class="fas fa-trash-alt text-xs"></i></button>
-            `;
-            list.appendChild(div);
-        };
-
-        window.moveStep = (btn, direction) => {
-            const item = btn.closest('.step-item');
-            if (direction === -1 && item.previousElementSibling) item.parentNode.insertBefore(item, item.previousElementSibling);
-            else if (direction === 1 && item.nextElementSibling) item.parentNode.insertBefore(item.nextElementSibling, item);
-        };
-
-        window.loadCards = async function() {
-            try {
-                const snap = await getDocs(collection(db, "cards"));
-                myCards = [];
-                snap.forEach(doc => myCards.push({ id: doc.id, ...doc.data() }));
-                filterAndSearchCards();
-            } catch (e) { console.error(e); }
-        };
-
-        function renderGrid(cards) {
-            const container = document.getElementById('cardContainer');
-            container.innerHTML = cards.map(card => `
-                <div class="bg-white rounded-3xl shadow-md border-b-8 border-slate-200 p-6 flex flex-col h-full">
-                    <div class="flex justify-between items-center mb-4">
-                        <span class="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded">${card.category || 'Vše'}</span>
-                        <div class="flex gap-4">
-                            <button onclick="editCard('${card.id}')" class="text-slate-300 hover:text-blue-500"><i class="fas fa-edit text-sm"></i></button>
-                            <button onclick="deleteCard('${card.id}')" class="text-slate-300 hover:text-red-500"><i class="fas fa-trash-alt text-sm"></i></button>
-                        </div>
-                    </div>
-                    ${card.image ? `<div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 border border-slate-100"><img src="${card.image}" class="w-full h-full object-cover opacity-90"></div>` : ''}
-                    <h3 class="text-xl font-black text-slate-800 uppercase leading-tight mb-2">${card.title}</h3>
-                    <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-red-600 transition shadow-lg">Otevřít kartu</button>
-                </div>
-            `).join('');
-            document.getElementById('loadingState').style.display = 'none';
-        }
-
-        window.openCard = id => {
-            const card = myCards.find(c => c.id === id);
-            const steps = card.steps_v2 || [];
-            const cardUrl = window.location.href.split('?')[0] + "?id=" + card.id;
-            const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(cardUrl)}&size=300`;
-
-            document.getElementById('modalContent').innerHTML = `
-                <div class="flex justify-between items-start mb-6">
-                    <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
-                    <img src="${dynamicQrUrl}" class="w-12 h-12 rounded-lg border border-slate-200 cursor-zoom-in" onclick="zoomImage('${dynamicQrUrl}')">
-                </div>
-                ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-xl mb-8 border-4 border-white cursor-zoom-in" onclick="zoomImage('${card.image}')">` : ''}
-                <div class="space-y-4 pb-10">
-                    ${steps.map(s => `
-                        <label class="flex items-center gap-5 p-5 ${s.critical ? 'bg-red-50 border-2 border-red-200' : 'bg-slate-50 border border-slate-200'} rounded-3xl active:scale-95 transition-all cursor-pointer">
-                            <input type="checkbox" onchange="checkCritical()" class="w-8 h-8 accent-red-600 rounded-xl ${s.critical ? 'critical-check' : ''}">
-                            <div class="flex-1">
-                                ${s.critical ? '<span class="block text-[10px] font-black text-red-600 uppercase mb-1">KRITICKÉ</span>' : ''}
-                                <span class="text-lg font-bold ${s.critical ? 'text-red-900' : 'text-slate-700'} leading-tight">${s.text}</span>
-                            </div>
-                        </label>
-                    `).join('')}
-                </div>
-            `;
-            document.getElementById('modal').classList.add('active');
-            document.body.classList.add('no-scroll');
-        };
-
-        window.openAdmin = () => { 
-            document.getElementById('editId').value = ""; document.getElementById('adminTitle').innerText = "Nová karta";
-            document.getElementById('newTitle').value = ""; document.getElementById('newDesc').value = "";
-            document.getElementById('newTags').value = ""; document.getElementById('adminStepsList').innerHTML = "";
-            document.getElementById('adminModal').classList.add('active'); document.body.classList.add('no-scroll');
-        };
-
-        window.editCard = id => {
-            const card = myCards.find(c => c.id === id);
-            document.getElementById('editId').value = id;
-            document.getElementById('newTitle').value = card.title;
-            document.getElementById('newCategory').value = card.category;
-            document.getElementById('newDesc').value = card.desc || "";
-            document.getElementById('newTags').value = card.tags ? card.tags.join(', ') : '';
-            document.getElementById('adminStepsList').innerHTML = "";
-            (card.steps_v2 || []).forEach(s => addStepField(s.critical, s.text));
-            document.getElementById('adminModal').classList.add('active');
-        };
-
-        document.getElementById('saveBtn').onclick = async () => {
-            const btn = document.getElementById('saveBtn');
-            const editId = document.getElementById('editId').value;
-            const fileInput = document.getElementById('newImageFile');
-            try {
-                btn.disabled = true; btn.innerText = "Ukládám...";
-                const steps_v2 = Array.from(document.querySelectorAll('#adminStepsList > .step-item')).map(el => ({
-                    text: el.querySelector('input').value,
-                    critical: el.dataset.critical === "true"
-                }));
-                const data = {
-                    title: document.getElementById('newTitle').value,
-                    category: document.getElementById('newCategory').value,
-                    desc: document.getElementById('newDesc').value,
-                    tags: document.getElementById('newTags').value.toLowerCase().split(',').map(t => t.trim()).filter(t => t !== ''),
-                    steps_v2: steps_v2
-                };
-                if (fileInput.files[0]) {
-                    data.image = await new Promise(res => {
-                        const r = new FileReader(); r.onload = e => {
-                            const i = new Image(); i.onload = () => {
-                                const c = document.createElement('canvas');
-                                let w = 800; let h = (i.height * w) / i.width;
-                                c.width = w; c.height = h; c.getContext('2d').drawImage(i, 0, 0, w, h);
-                                res(c.toDataURL('image/jpeg', 0.5));
-                            }; i.src = e.target.result;
-                        }; r.readAsDataURL(fileInput.files[0]);
-                    });
-                }
-                if (editId) await updateDoc(doc(db, "cards", editId), data);
-                else await addDoc(collection(db, "cards"), data);
-                location.reload();
-            } catch (err) { alert("Chyba: " + err.message); btn.disabled = false; btn.innerText = "Uložit na Cloud"; }
-        };
-
-        window.filterAndSearchCards = () => {
-            const term = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = myCards.filter(c => (currentFilter === 'all' || c.category === currentFilter) && 
-                (c.title.toLowerCase().includes(term) || (c.tags && c.tags.some(t => t.includes(term)))));
-            renderGrid(filtered);
-        };
-
-        window.filterCards = (cat, btn) => {
-            currentFilter = cat;
-            document.querySelectorAll('.filter-btn').forEach(b => { b.classList.remove('active', 'bg-red-600', 'text-white'); b.classList.add('bg-white', 'text-slate-600'); });
-            btn.classList.add('active', 'bg-red-600', 'text-white');
-            filterAndSearchCards();
-        };
-
-        // HLAVNÍ SPOUŠTĚČ - TADY SE DĚJE TA OPRAVA
-        window.addEventListener('DOMContentLoaded', () => {
-            const currentUrl = window.location.href.split('?')[0];
-            const qrElement = document.getElementById('mainAppQr');
-            if (qrElement) {
-                qrElement.src = `https://quickchart.io/qr?text=${encodeURIComponent(currentUrl)}&size=300`;
-            }
-            
-            const params = new URLSearchParams(window.location.search);
-            if(params.get('id')) {
-                loadCards().then(() => openCard(params.get('id')));
-            } else {
-                loadCards();
-            }
-        });
-    </script>
-</body>
-</html>
+                <button onclick="this.parentElement.remove()" class="
