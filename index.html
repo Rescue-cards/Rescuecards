@@ -27,6 +27,11 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .noselect { user-select: none; -webkit-user-select: none; }
+        
+        /* Animace pro srdíčko */
+        .fav-active { color: #dc2626; transform: scale(1.2); }
+        .heart-btn { transition: all 0.2s ease; }
+        .heart-btn:active { transform: scale(1.4); }
     </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-900">
@@ -52,6 +57,9 @@
         
         <div class="flex gap-2 justify-center overflow-x-auto pb-2 no-scrollbar">
             <button onclick="filterCards('all', this)" class="filter-btn active bg-red-600 text-white px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Vše</button>
+            <button onclick="filterCards('fav', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition italic">
+                <i class="fas fa-heart mr-1"></i> Oblíbené
+            </button>
             <button onclick="filterCards('deti', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Děti</button>
             <button onclick="filterCards('interna', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Interna</button>
             <button onclick="filterCards('trauma', this)" class="filter-btn bg-white text-slate-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 whitespace-nowrap transition">Trauma</button>
@@ -74,7 +82,7 @@
                 <input type="hidden" id="editId">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="text-[10px] uppercase font-bold text-slate-400">Název</label>
+                        <label class="text-[10px] uppercase font-bold text-slate-400 font-sans">Název situace</label>
                         <input type="text" id="newTitle" class="w-full border p-3 rounded-xl bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div>
@@ -84,20 +92,10 @@
                         </select>
                     </div>
                 </div>
-                <div>
-                    <label class="text-[10px] uppercase font-bold text-slate-400">Popis</label>
-                    <input type="text" id="newDesc" class="w-full border p-3 rounded-xl bg-slate-50 text-sm">
-                </div>
-                <div>
-                    <label class="text-[10px] uppercase font-bold text-slate-400">Tagy</label>
-                    <input type="text" id="newTags" class="w-full border p-3 rounded-xl bg-slate-50 text-sm italic">
-                </div>
-                <div>
-                    <label class="text-[10px] uppercase font-bold text-slate-400">Obrázek</label>
-                    <input type="file" id="newImageFile" accept="image/*" class="w-full text-xs border-2 border-dashed p-4 rounded-xl">
-                </div>
+                <input type="text" id="newDesc" placeholder="Stručný popis" class="w-full border p-3 rounded-xl bg-slate-50 text-sm">
+                <input type="text" id="newTags" placeholder="Tagy (čárka)" class="w-full border p-3 rounded-xl bg-slate-50 text-sm italic">
+                <input type="file" id="newImageFile" accept="image/*" class="w-full text-xs border-2 border-dashed p-4 rounded-xl">
                 <div class="bg-slate-100 p-4 rounded-2xl border border-slate-200">
-                    <label class="text-[10px] uppercase font-bold text-slate-400 mb-2 block">Seznam kroků</label>
                     <div id="adminStepsList" class="space-y-2"></div>
                     <div class="flex gap-2 mt-4">
                         <button onclick="addStepField(false)" class="flex-1 bg-white border border-slate-300 py-3 rounded-xl text-[10px] font-bold uppercase hover:bg-slate-50">+ Běžný bod</button>
@@ -106,8 +104,8 @@
                 </div>
             </div>
             <div class="flex border-t border-slate-200">
-                <button onclick="closeAll()" class="w-1/2 p-5 text-xs font-bold uppercase text-slate-400 hover:bg-slate-50">Zrušit</button>
-                <button id="saveBtn" class="w-1/2 p-5 bg-green-600 text-white text-xs font-bold uppercase hover:bg-green-700">Uložit</button>
+                <button onclick="closeAll()" class="w-1/2 p-5 text-xs font-bold uppercase text-slate-400">Zrušit</button>
+                <button id="saveBtn" class="w-1/2 p-5 bg-green-600 text-white text-xs font-bold uppercase">Uložit</button>
             </div>
         </div>
     </div>
@@ -115,17 +113,15 @@
     <div id="modal" class="modal">
         <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onclick="closeAll()"></div>
         <div class="bg-white w-11/12 md:max-w-xl mx-auto rounded-3xl shadow-2xl z-[110] overflow-hidden flex flex-col max-h-[90vh] relative noselect">
-            
             <div id="zzsAlert" class="hidden sticky top-0 left-0 right-0 p-4 bg-red-600 text-white pulse-alert flex-col items-center gap-2 z-[120] shadow-lg border-b-4 border-red-800 text-center">
                 <div class="flex items-center gap-3 justify-center">
                     <i class="fas fa-phone-alt text-2xl animate-bounce"></i>
                     <h3 class="text-xl font-black uppercase tracking-widest">Volejte linku 155!</h3>
                 </div>
-                <p class="text-[11px] font-bold opacity-90 uppercase tracking-wide">Byla identifikována kritická situace. Doporučujeme konzultovat se záchrannou službou.</p>
+                <p class="text-[11px] font-bold opacity-90 uppercase tracking-wide">Identifikována kritická situace. Doporučujeme konzultovat se ZZS.</p>
             </div>
-
             <div class="p-8 overflow-y-auto bg-white" id="modalContent"></div>
-            <button onclick="closeAll()" class="w-full bg-slate-800 text-white py-6 font-black uppercase tracking-widest text-sm shrink-0 hover:bg-slate-900">Zavřít kartu</button>
+            <button onclick="closeAll()" class="w-full bg-slate-800 text-white py-6 font-black uppercase tracking-widest text-sm shrink-0">Zavřít kartu</button>
         </div>
     </div>
 
@@ -151,6 +147,7 @@
         const ADMIN_PASSWORD = "155"; 
         let myCards = [];
         let currentFilter = 'all';
+        let favorites = JSON.parse(localStorage.getItem('rescueFavs')) || [];
 
         window.closeAll = () => {
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
@@ -165,12 +162,21 @@
 
         window.closeZoom = () => document.getElementById('zoomOverlay').classList.remove('active');
 
-        // LOGIKA: Zobrazit alert, pokud je ZAŠKRTNUTÝ nějaký kritický bod
+        window.toggleFavorite = (e, id) => {
+            e.stopPropagation();
+            if (favorites.includes(id)) {
+                favorites = favorites.filter(favId => favId !== id);
+            } else {
+                favorites.push(id);
+            }
+            localStorage.setItem('rescueFavs', JSON.stringify(favorites));
+            filterAndSearchCards(); // Překreslit pro zobrazení změn
+        };
+
         window.checkCritical = () => {
             const alertBox = document.getElementById('zzsAlert');
             const criticalCheckboxes = Array.from(document.querySelectorAll('.critical-check'));
             const isCriticalDetected = criticalCheckboxes.some(c => c.checked);
-            
             if (isCriticalDetected) {
                 alertBox.classList.remove('hidden');
                 alertBox.classList.add('flex');
@@ -190,7 +196,7 @@
                     <button onclick="moveStep(this, -1)" class="text-slate-300 hover:text-blue-500"><i class="fas fa-chevron-up text-[10px]"></i></button>
                     <button onclick="moveStep(this, 1)" class="text-slate-300 hover:text-blue-500"><i class="fas fa-chevron-down text-[10px]"></i></button>
                 </div>
-                <input type="text" value="${value}" placeholder="${isCritical ? 'KRITICKÝ BOD (Spustí varování)' : 'Běžný krok...'}" class="flex-1 bg-transparent outline-none text-sm font-bold ${isCritical ? 'text-red-700' : 'text-slate-700'}">
+                <input type="text" value="${value}" placeholder="${isCritical ? 'KRITICKÝ BOD' : 'Běžný krok...'}" class="flex-1 bg-transparent outline-none text-sm font-bold ${isCritical ? 'text-red-700' : 'text-slate-700'}">
                 <button onclick="this.parentElement.remove()" class="text-slate-300 hover:text-red-500 px-2"><i class="fas fa-trash-alt text-xs"></i></button>
             `;
             list.appendChild(div);
@@ -216,21 +222,27 @@
             if (cards.length === 0) {
                 container.innerHTML = `<div class="col-span-full text-center py-10 text-slate-400">Žádné karty nenalezeny.</div>`;
             } else {
-                container.innerHTML = cards.map(card => `
-                    <div class="bg-white rounded-3xl shadow-md border-b-8 border-slate-200 p-6 flex flex-col h-full hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                        <div class="flex justify-between items-center mb-4">
-                            <span class="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded tracking-wide">${card.category || 'Vše'}</span>
-                            <div class="flex gap-4">
-                                <button onclick="editCard('${card.id}')" class="text-slate-300 hover:text-blue-500 transition"><i class="fas fa-edit text-sm"></i></button>
-                                <button onclick="deleteCard('${card.id}')" class="text-slate-300 hover:text-red-500 transition"><i class="fas fa-trash-alt text-sm"></i></button>
+                container.innerHTML = cards.map(card => {
+                    const isFav = favorites.includes(card.id);
+                    return `
+                        <div class="bg-white rounded-3xl shadow-md border-b-8 border-slate-200 p-6 flex flex-col h-full hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded tracking-wide">${card.category || 'Vše'}</span>
+                                <div class="flex gap-4 items-center">
+                                    <button onclick="toggleFavorite(event, '${card.id}')" class="heart-btn ${isFav ? 'fav-active' : 'text-slate-300'}">
+                                        <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
+                                    </button>
+                                    <button onclick="editCard('${card.id}')" class="text-slate-300 hover:text-blue-500 transition"><i class="fas fa-edit text-sm"></i></button>
+                                    <button onclick="deleteCard('${card.id}')" class="text-slate-300 hover:text-red-500 transition"><i class="fas fa-trash-alt text-sm"></i></button>
+                                </div>
                             </div>
+                            ${card.image ? `<div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 border border-slate-100 relative group"><img src="${card.image}" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"></div>` : ''}
+                            <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 uppercase tracking-tight">${card.title}</h3>
+                            <p class="text-slate-500 text-sm mb-4 line-clamp-2 leading-snug flex-grow">${card.desc || ''}</p>
+                            <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-red-600 transition shadow-lg hover:bg-slate-800">Otevřít</button>
                         </div>
-                        ${card.image ? `<div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 border border-slate-100 relative group"><img src="${card.image}" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"></div>` : ''}
-                        <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 uppercase tracking-tight">${card.title}</h3>
-                        <p class="text-slate-500 text-sm mb-4 line-clamp-2 leading-snug flex-grow">${card.desc || ''}</p>
-                        <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-red-600 transition shadow-lg hover:bg-slate-800">Otevřít</button>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             }
             document.getElementById('loadingState').style.display = 'none';
         }
@@ -294,7 +306,8 @@
                             const i = new Image(); i.onload = () => {
                                 const c = document.createElement('canvas');
                                 let w = 800; let h = (i.height * w) / i.width;
-                                c.width = w; c.height = h; c.getContext('2d').drawImage(i, 0, 0, w, h);
+                                c.width = w; c.height = h;
+                                c.getContext('2d').drawImage(i, 0, 0, w, h);
                                 res(c.toDataURL('image/jpeg', 0.6));
                             }; i.src = e.target.result;
                         }; r.readAsDataURL(fileInput.files[0]);
@@ -342,14 +355,29 @@
         window.filterAndSearchCards = () => {
             const term = document.getElementById('searchInput').value.toLowerCase();
             let filtered = myCards;
-            if (currentFilter !== 'all') filtered = filtered.filter(c => c.category === currentFilter);
-            if (term) filtered = filtered.filter(c => c.title.toLowerCase().includes(term) || (c.tags && c.tags.some(t => t.includes(term))) || (c.desc && c.desc.toLowerCase().includes(term)));
+            
+            if (currentFilter === 'fav') {
+                filtered = filtered.filter(c => favorites.includes(c.id));
+            } else if (currentFilter !== 'all') {
+                filtered = filtered.filter(c => c.category === currentFilter);
+            }
+
+            if (term) {
+                filtered = filtered.filter(c => 
+                    c.title.toLowerCase().includes(term) || 
+                    (c.tags && c.tags.some(t => t.includes(term))) || 
+                    (c.desc && c.desc.toLowerCase().includes(term))
+                );
+            }
             renderGrid(filtered);
         };
 
         window.filterCards = (cat, btn) => {
             currentFilter = cat;
-            document.querySelectorAll('.filter-btn').forEach(b => { b.classList.remove('active', 'bg-red-600', 'text-white'); b.classList.add('bg-white', 'text-slate-600'); });
+            document.querySelectorAll('.filter-btn').forEach(b => { 
+                b.classList.remove('active', 'bg-red-600', 'text-white'); 
+                b.classList.add('bg-white', 'text-slate-600'); 
+            });
             btn.classList.add('active', 'bg-red-600', 'text-white');
             btn.classList.remove('bg-white', 'text-slate-600');
             filterAndSearchCards();
@@ -366,4 +394,3 @@
     </script>
 </body>
 </html>
-
