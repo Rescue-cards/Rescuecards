@@ -25,14 +25,13 @@
             100% { background-color: #dc2626; } 
         }
         
-        /* OPRAVA SCROLLOVÁNÍ FILTRŮ */
         .filter-scroll-container {
             display: flex;
             overflow-x: auto;
             scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
             scroll-snap-type: x mandatory;
-            touch-action: pan-x; /* Povolí pouze horizontální tah */
+            touch-action: pan-x;
         }
         
         .filter-btn {
@@ -225,26 +224,31 @@
 
         function renderGrid(cards) {
             const container = document.getElementById('cardContainer');
-            container.innerHTML = cards.length === 0 ? '<div class="col-span-full text-center py-10">Žádné karty.</div>' : cards.map(card => {
-                const isFav = favorites.includes(card.id);
-                return `
-                    <div class="bg-white rounded-3xl shadow-md border-b-8 border-slate-200 p-6 flex flex-col h-full active:scale-[0.98] transition-all transform">
-                        <div class="flex justify-between items-center mb-4">
-                            <span class="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded tracking-wide">${card.category || 'Vše'}</span>
-                            <div class="flex gap-4 items-center">
-                                <button onclick="toggleFavorite(event, '${card.id}')" class="heart-btn ${isFav ? 'fav-active' : 'text-slate-300'}">
-                                    <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
-                                </button>
-                                <button onclick="editCard('${card.id}')" class="text-slate-300"><i class="fas fa-edit text-sm"></i></button>
-                                <button onclick="deleteCard('${card.id}')" class="text-slate-300"><i class="fas fa-trash-alt text-sm"></i></button>
+            if (cards.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center py-10 text-slate-400">Žádné karty nenalezeny.</div>`;
+            } else {
+                container.innerHTML = cards.map(card => {
+                    const isFav = favorites.includes(card.id);
+                    return `
+                        <div class="bg-white rounded-3xl shadow-md border-b-8 border-slate-200 p-6 flex flex-col h-full active:scale-[0.98] transition-all transform">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-1 rounded tracking-wide">${card.category || 'Vše'}</span>
+                                <div class="flex gap-4 items-center">
+                                    <button onclick="toggleFavorite(event, '${card.id}')" class="heart-btn ${isFav ? 'fav-active' : 'text-slate-300'}">
+                                        <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
+                                    </button>
+                                    <button onclick="editCard('${card.id}')" class="text-slate-300 hover:text-blue-500 transition"><i class="fas fa-edit text-sm"></i></button>
+                                    <button onclick="deleteCard('${card.id}')" class="text-slate-300 hover:text-red-500 transition"><i class="fas fa-trash-alt text-sm"></i></button>
+                                </div>
                             </div>
+                            ${card.image ? `<div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 border border-slate-100 relative group"><img src="${card.image}" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"></div>` : ''}
+                            <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 uppercase tracking-tight">${card.title}</h3>
+                            <p class="text-slate-500 text-sm mb-4 line-clamp-2 leading-snug flex-grow">${card.desc || ''}</p>
+                            <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-red-600 transition shadow-lg hover:bg-slate-800">Otevřít</button>
                         </div>
-                        ${card.image ? `<div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 border border-slate-100"><img src="${card.image}" class="w-full h-full object-cover"></div>` : ''}
-                        <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 uppercase">${card.title}</h3>
-                        <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Otevřít</button>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
+            }
             document.getElementById('loadingState').style.display = 'none';
         }
 
@@ -315,11 +319,15 @@
         window.openCard = id => {
             const card = myCards.find(c => c.id === id);
             const steps = card.steps_v2 || [];
-            const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(window.location.href.split('?')[0] + "?id=" + card.id)}&size=300`;
+            
+            const baseUrl = window.location.origin + window.location.pathname;
+            const uniqueCardUrl = `${baseUrl}?id=${card.id}`;
+            const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(uniqueCardUrl)}&size=300`;
+
             document.getElementById('modalContent').innerHTML = `
                 <div class="flex justify-between items-start mb-6">
                     <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
-                    <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-50" onclick="zoomImage('${dynamicQrUrl}')">
+                    <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-50 cursor-pointer hover:opacity-100 transition-opacity" onclick="zoomImage('${dynamicQrUrl}')">
                 </div>
                 ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-xl mb-8" onclick="zoomImage('${card.image}')">` : ''}
                 <div class="space-y-4 pb-6">
@@ -352,11 +360,19 @@
         };
 
         window.addEventListener('DOMContentLoaded', () => {
-            const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(window.location.href.split('?')[0])}&size=300`;
-            document.getElementById('mainAppQr').src = qrUrl;
+            const baseUrl = window.location.origin + window.location.pathname;
+            const mainQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(baseUrl)}&size=300`;
+            document.getElementById('mainAppQr').src = mainQrUrl;
+            
             loadCards();
+            
             const params = new URLSearchParams(window.location.search);
-            if(params.get('id')) setTimeout(() => openCard(params.get('id')), 1000);
+            if(params.get('id')) {
+                setTimeout(() => {
+                    const cardExists = myCards.find(c => c.id === params.get('id'));
+                    if (cardExists) openCard(params.get('id'));
+                }, 1000);
+            }
         });
     </script>
 </body>
