@@ -213,15 +213,29 @@
             else if (direction === 1 && item.nextElementSibling) item.parentNode.insertBefore(item.nextElementSibling, item);
         };
 
-        window.loadCards = async function() {
+    window.loadCards = async function() {
             try {
                 const querySnapshot = await getDocs(collection(db, "cards"));
                 myCards = [];
                 querySnapshot.forEach(doc => myCards.push({ id: doc.id, ...doc.data() }));
                 filterAndSearchCards();
-            } catch (e) { console.error(e); }
-        };
 
+                // OPRAVA: Kontrola URL až ve chvíli, kdy jsou data na 100 % stažená
+                const params = new URLSearchParams(window.location.search);
+                const cardId = params.get('id');
+                if (cardId) {
+                    const cardExists = myCards.find(c => c.id === cardId);
+                    if (cardExists) {
+                        openCard(cardId);
+                        // Vyčistí adresu, aby se karta po zavření neotevírala znovu při refreshi
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                }
+            } catch (e) { 
+                console.error("Chyba Firebase:", e); 
+                document.getElementById('loadingState').innerText = "Chyba připojení k databázi.";
+            }
+        };
         function renderGrid(cards) {
             const container = document.getElementById('cardContainer');
             if (cards.length === 0) {
@@ -359,21 +373,11 @@
             filterAndSearchCards();
         };
 
-        window.addEventListener('DOMContentLoaded', () => {
+       window.addEventListener('DOMContentLoaded', () => {
             const baseUrl = window.location.origin + window.location.pathname;
             const mainQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(baseUrl)}&size=300`;
             document.getElementById('mainAppQr').src = mainQrUrl;
             
+            // Spustíme načítání karet (otevření z QR kódu se vyřeší samo uvnitř loadCards)
             loadCards();
-            
-            const params = new URLSearchParams(window.location.search);
-            if(params.get('id')) {
-                setTimeout(() => {
-                    const cardExists = myCards.find(c => c.id === params.get('id'));
-                    if (cardExists) openCard(params.get('id'));
-                }, 1000);
-            }
         });
-    </script>
-</body>
-</html>
