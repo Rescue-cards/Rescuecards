@@ -170,6 +170,7 @@
         window.closeZoom = () => document.getElementById('zoomOverlay').classList.remove('active');
 
         // Funkce pro rozbalení/sbalení popisu
+
         window.toggleDescription = () => {
             const descEl = document.getElementById('fullDescription');
             descEl.classList.toggle('hidden');
@@ -302,55 +303,98 @@
             if(confirm("Smazat?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); }
         };
 
-        document.getElementById('saveBtn').onclick = async () => {
+       document.getElementById('saveBtn').onclick = async () => {
             const btn = document.getElementById('saveBtn');
             const editId = document.getElementById('editId').value;
             const fileInput = document.getElementById('newImageFile');
+            
             try {
-                btn.disabled = true; btn.innerText = "Ukládám...";
+                btn.disabled = true; 
+                btn.innerText = "Ukládám a zálohuji..."; // Info pro uživatele
+
+                // 1. Sbírání dat z formuláře
                 const steps_v2 = Array.from(document.querySelectorAll('#adminStepsList > .step-item')).map(el => ({
                     text: el.querySelector('input').value,
                     critical: el.dataset.critical === "true"
                 }));
+
                 const data = {
                     title: document.getElementById('newTitle').value,
                     category: document.getElementById('newCategory').value,
                     desc: document.getElementById('newDesc').value,
                     tags: document.getElementById('newTags').value.toLowerCase().split(',').map(t => t.trim()).filter(t => t !== ''),
-                    steps_v2: steps_v2
+                    steps_v2: steps_v2,
+                    lastModified: new Date().toISOString(), // Datum změny
+                    backupType: editId ? "edit" : "new" // Info, jestli šlo o úpravu nebo novou kartu
                 };
+
+                // 2. Zpracování obrázku (pokud byl nahrán nový)
                 if (fileInput.files[0]) {
                     data.image = await new Promise(res => {
-                        const r = new FileReader(); r.onload = e => {
-                            const i = new Image(); i.onload = () => {
+                        const r = new FileReader();
+                        r.onload = e => {
+                            const i = new Image();
+                            i.onload = () => {
                                 const c = document.createElement('canvas');
-                                let w = 800; let h = (i.height * w) / i.width;
-                                c.width = w; c.height = h; c.getContext('2d').drawImage(i, 0, 0, w, h);
+                                let w = 800; 
+                                let h = (i.height * w) / i.width;
+                                c.width = w; c.height = h;
+                                c.getContext('2d').drawImage(i, 0, 0, w, h);
                                 res(c.toDataURL('image/jpeg', 0.6));
-                            }; i.src = e.target.result;
-                        }; r.readAsDataURL(fileInput.files[0]);
+                            };
+                            i.src = e.target.result;
+                        };
+                        r.readAsDataURL(fileInput.files[0]);
                     });
                 } else if (editId) {
-                    const old = myCards.find(c => c.id === editId); if(old.image) data.image = old.image;
+                    // Pokud se obrázek neměnil, necháme ten starý
+                    const old = myCards.find(c => c.id === editId); 
+                    if(old && old.image) data.image = old.image;
                 }
-                if (editId) await updateDoc(doc(db, "cards", editId), data);
-                else await addDoc(collection(db, "cards"), data);
+
+                // 3. ULOŽENÍ DO HLAVNÍ DATABÁZE (Viditelné v aplikaci)
+                if (editId) {
+                    await updateDoc(doc(db, "cards", editId), data);
+                } else {
+                    await addDoc(collection(db, "cards"), data);
+                }
+
+                // 4. ULOŽENÍ DO TAJNÉ ZÁLOHY (Historie změn)
+                // Uložíme kopii dat do kolekce 'cards_backup'. 
+                // Nikdy nic nepřepisujeme, vždy vytváříme nový záznam (addDoc).
+                await addDoc(collection(db, "cards_backup"), data);
+
+                // Hotovo, obnovit stránku
                 location.reload();
-            } catch (err) { alert(err.message); btn.disabled = false; }
+
+            } catch (err) {
+                alert("Chyba při ukládání: " + err.message);
+                btn.disabled = false; 
+                btn.innerText = "Uložit";
+            }
         };
 
+       // --- CHUNK 2: OTEVÍRÁNÍ KARTY (Vyměnit celou funkci openCard) ---
         window.openCard = id => {
             const card = myCards.find(c => c.id === id);
+            if (!card) return; // Pojistka proti chybě
+
             const steps = card.steps_v2 || [];
             
+            // Generování URL
             const baseUrl = window.location.origin + window.location.pathname;
             const uniqueCardUrl = `${baseUrl}?id=${card.id}`;
             const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(uniqueCardUrl)}&size=300`;
 
             document.getElementById('modalContent').innerHTML = `
                 <div class="flex justify-between items-start mb-2">
-                    <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
-                    <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-50 cursor-pointer hover:opacity-100 transition-opacity" onclick="zoomImage('${dynamicQrUrl}')">
+                    <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none pr-2">${card.title}</h2>
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="downloadCard('${card.id}')" class="w-12 h-12 bg-slate-100 rounded-xl border border-slate-200 text-slate-600 hover:text-red-600 flex items-center justify-center transition" title="Stáhnout PDF">
+                            <i class="fas fa-file-pdf text-xl"></i>
+                        </button>
+                        <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-50 cursor-pointer hover:opacity-100 transition-opacity border border-slate-200 rounded-xl" onclick="zoomImage('${dynamicQrUrl}')">
+                    </div>
                 </div>
 
                 <div class="mb-6">
@@ -385,6 +429,62 @@
             if (term) filtered = filtered.filter(c => c.title.toLowerCase().includes(term) || (c.tags && c.tags.some(t => t.includes(term))));
             renderGrid(filtered);
         };
+// --- CHUNK 1: FUNKCE PRO TISK (Vložit před filterCards) ---
+        window.downloadCard = (id) => {
+            const card = myCards.find(c => c.id === id);
+            if (!card) return;
+
+            const printWindow = window.open('', '_blank');
+            const stepsHtml = (card.steps_v2 || []).map(s => `
+                <div class="step ${s.critical ? 'critical' : ''}">
+                    <div class="checkbox"></div>
+                    <div class="text">
+                        ${s.text}
+                        ${s.critical ? '<span class="alert-tag">KRITICKÝ BOD - VOLAT 155</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>${card.title} - RescueCards</title>
+                    <style>
+                        body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #1e293b; }
+                        .header { border-bottom: 3px solid #dc2626; padding-bottom: 20px; margin-bottom: 30px; }
+                        h1 { margin: 0; color: #1e293b; font-size: 32px; text-transform: uppercase; }
+                        .category { color: #dc2626; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }
+                        .desc { font-size: 18px; margin-bottom: 30px; line-height: 1.6; color: #475569; background: #f1f5f9; padding: 20px; border-radius: 10px; }
+                        .image-container { text-align: center; margin-bottom: 40px; }
+                        img { max-width: 100%; max-height: 400px; border-radius: 10px; border: 1px solid #e2e8f0; }
+                        .steps-title { font-size: 20px; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+                        .step { display: flex; align-items: flex-start; margin-bottom: 15px; page-break-inside: avoid; }
+                        .checkbox { width: 24px; height: 24px; border: 2px solid #94a3b8; margin-right: 15px; border-radius: 4px; flex-shrink: 0; }
+                        .step.critical .checkbox { border-color: #dc2626; border-width: 3px; }
+                        .step.critical .text { font-weight: bold; color: #991b1b; }
+                        .text { font-size: 16px; line-height: 1.5; margin-top: 2px; }
+                        .alert-tag { display: inline-block; background: #fee2e2; color: #991b1b; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: bold; vertical-align: middle; }
+                        .footer { margin-top: 50px; font-size: 12px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+                        @media print { body { -webkit-print-color-adjust: exact; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div class="category">RescueCards Hub / ${card.category}</div>
+                        <h1>${card.title}</h1>
+                    </div>
+                    ${card.desc ? `<div class="desc"><strong>Popis:</strong> ${card.desc}</div>` : ''}
+                    ${card.image ? `<div class="image-container"><img src="${card.image}"></div>` : ''}
+                    <div class="steps-title">Postup a kontrolní list</div>
+                    <div class="steps-container">${stepsHtml}</div>
+                    <div class="footer">Vygenerováno z aplikace RescueCards Hub | ${new Date().toLocaleDateString('cs-CZ')}</div>
+                    <script>window.onload = () => { window.print(); window.close(); };<\/script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        };
 
         window.filterCards = (cat, btn) => {
             currentFilter = cat;
@@ -393,12 +493,81 @@
             filterAndSearchCards();
         };
 
+        window.downloadCard = (id) => {
+            const card = myCards.find(c => c.id === id);
+            if (!card) return;
+
+            const printWindow = window.open('', '_blank');
+            
+            const stepsHtml = (card.steps_v2 || []).map(s => `
+                <div class="step ${s.critical ? 'critical' : ''}">
+                    <div class="checkbox"></div>
+                    <div class="text">
+                        ${s.text}
+                        ${s.critical ? '<span class="alert-tag">KRITICKÝ BOD - VOLAT 155</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            const htmlContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>${card.title} - RescueCards</title>
+                    <style>
+                        body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #1e293b; }
+                        .header { border-bottom: 3px solid #dc2626; padding-bottom: 20px; margin-bottom: 30px; }
+                        h1 { margin: 0; color: #1e293b; font-size: 32px; text-transform: uppercase; }
+                        .category { color: #dc2626; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }
+                        .desc { font-size: 18px; margin-bottom: 30px; line-height: 1.6; color: #475569; background: #f1f5f9; padding: 20px; border-radius: 10px; }
+                        .image-container { text-align: center; margin-bottom: 40px; }
+                        img { max-width: 100%; max-height: 400px; border-radius: 10px; border: 1px solid #e2e8f0; }
+                        .steps-title { font-size: 20px; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+                        .step { display: flex; align-items: flex-start; margin-bottom: 15px; page-break-inside: avoid; }
+                        .checkbox { width: 24px; height: 24px; border: 2px solid #94a3b8; margin-right: 15px; border-radius: 4px; flex-shrink: 0; }
+                        .step.critical .checkbox { border-color: #dc2626; border-width: 3px; }
+                        .step.critical .text { font-weight: bold; color: #991b1b; }
+                        .text { font-size: 16px; line-height: 1.5; margin-top: 2px; }
+                        .alert-tag { display: inline-block; background: #fee2e2; color: #991b1b; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: bold; vertical-align: middle; }
+                        .footer { margin-top: 50px; font-size: 12px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+                        @media print { body { -webkit-print-color-adjust: exact; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div class="category">RescueCards Hub / ${card.category}</div>
+                        <h1>${card.title}</h1>
+                    </div>
+
+                    ${card.desc ? `<div class="desc"><strong>Popis:</strong> ${card.desc}</div>` : ''}
+
+                    ${card.image ? `<div class="image-container"><img src="${card.image}"></div>` : ''}
+
+                    <div class="steps-title">Postup a kontrolní list</div>
+                    <div class="steps-container">
+                        ${stepsHtml}
+                    </div>
+
+                    <div class="footer">
+                        Vygenerováno z aplikace RescueCards Hub | ${new Date().toLocaleDateString('cs-CZ')}
+                    </div>
+                    <script>
+                        window.onload = () => { window.print(); window.close(); };
+                    <\/script>
+                </body>
+                </html>
+            `;
+
+            printWindow.document.write(htmlContent);
+            printWindow.document.close();
+        };
+
         window.addEventListener('DOMContentLoaded', () => {
             const baseUrl = window.location.origin + window.location.pathname;
             const mainQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(baseUrl)}&size=300`;
             document.getElementById('mainAppQr').src = mainQrUrl;
             
-            // Načíst karty (otevření z QR kódu se řeší přímo v loadCards funkci)
+            
             loadCards();
         });
     </script>
