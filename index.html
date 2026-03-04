@@ -128,7 +128,7 @@
                 <p class="text-[11px] font-bold opacity-90 uppercase tracking-wide">Identifikována kritická situace. Doporučujeme konzultovat se ZZS.</p>
             </div>
             <div class="p-8 overflow-y-auto bg-white" id="modalContent"></div>
-            <button onclick="closeAll()" class="w-full bg-slate-800 text-white py-6 font-black uppercase tracking-widest text-sm shrink-0 hover:bg-slate-900">Zavřít kartu</button>
+            <button onclick="closeAll()" class="w-full bg-slate-800 text-white py-6 font-black uppercase tracking-widest text-sm shrink-0">Zavřít kartu</button>
         </div>
     </div>
 
@@ -168,6 +168,12 @@
         };
 
         window.closeZoom = () => document.getElementById('zoomOverlay').classList.remove('active');
+
+        // Funkce pro rozbalení/sbalení popisu
+        window.toggleDescription = () => {
+            const descEl = document.getElementById('fullDescription');
+            descEl.classList.toggle('hidden');
+        };
 
         window.toggleFavorite = (e, id) => {
             e.stopPropagation();
@@ -220,14 +226,12 @@
                 querySnapshot.forEach(doc => myCards.push({ id: doc.id, ...doc.data() }));
                 filterAndSearchCards();
 
-                // OPRAVA QR: Po načtení zjistíme, zda URL obsahuje ID a kartu rovnou otevřeme
                 const params = new URLSearchParams(window.location.search);
                 const cardId = params.get('id');
                 if (cardId) {
                     const cardExists = myCards.find(c => c.id === cardId);
                     if (cardExists) {
                         openCard(cardId);
-                        // Vyčistí URL adresu pro čistý reload
                         window.history.replaceState({}, document.title, window.location.pathname);
                     }
                 }
@@ -270,8 +274,11 @@
         window.openAdmin = () => { 
             const pass = prompt("Heslo:");
             if(pass !== ADMIN_PASSWORD) return;
-            document.getElementById('editId').value = ""; document.getElementById('adminStepsList').innerHTML = "";
-            addStepField(false); document.getElementById('adminModal').classList.add('active');
+            document.getElementById('editId').value = ""; document.getElementById('adminTitle').innerText = "Nová karta";
+            document.getElementById('newTitle').value = ""; document.getElementById('newDesc').value = "";
+            document.getElementById('newTags').value = ""; document.getElementById('newImageFile').value = "";
+            document.getElementById('adminStepsList').innerHTML = ""; addStepField(false);
+            document.getElementById('adminModal').classList.add('active'); document.body.classList.add('no-scroll');
         };
 
         window.editCard = id => {
@@ -336,16 +343,25 @@
             const card = myCards.find(c => c.id === id);
             const steps = card.steps_v2 || [];
             
-            // OPRAVA QR KÓDU: Sestaví přesnou a čistou URL
             const baseUrl = window.location.origin + window.location.pathname;
             const uniqueCardUrl = `${baseUrl}?id=${card.id}`;
             const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(uniqueCardUrl)}&size=300`;
 
             document.getElementById('modalContent').innerHTML = `
-                <div class="flex justify-between items-start mb-6">
+                <div class="flex justify-between items-start mb-2">
                     <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">${card.title}</h2>
                     <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-50 cursor-pointer hover:opacity-100 transition-opacity" onclick="zoomImage('${dynamicQrUrl}')">
                 </div>
+
+                <div class="mb-6">
+                    <button onclick="toggleDescription()" class="text-[10px] uppercase font-bold bg-slate-200 text-slate-600 px-3 py-1 rounded-full hover:bg-slate-300 transition flex items-center gap-1">
+                        Popis <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div id="fullDescription" class="hidden mt-3 text-sm text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-200 leading-relaxed">
+                        ${card.desc || "Žádný popis nebyl zadán."}
+                    </div>
+                </div>
+
                 ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-xl mb-8" onclick="zoomImage('${card.image}')">` : ''}
                 <div class="space-y-4 pb-6">
                     ${steps.map(s => `
@@ -358,6 +374,7 @@
             `;
             document.getElementById('modal').classList.add('active');
             document.body.classList.add('no-scroll');
+            checkCritical();
         };
 
         window.filterAndSearchCards = () => {
