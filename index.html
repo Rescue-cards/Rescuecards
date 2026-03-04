@@ -374,25 +374,30 @@
             }
         };
 
-       // --- CHUNK 2: OTEVÍRÁNÍ KARTY (Vyměnit celou funkci openCard) ---
+       // --- UPRAVENÁ FUNKCE OTEVÍRÁNÍ KARTY (S tiskárnou a stahováním) ---
         window.openCard = id => {
             const card = myCards.find(c => c.id === id);
-            if (!card) return; // Pojistka proti chybě
+            if (!card) return;
 
             const steps = card.steps_v2 || [];
             
-            // Generování URL
             const baseUrl = window.location.origin + window.location.pathname;
             const uniqueCardUrl = `${baseUrl}?id=${card.id}`;
             const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(uniqueCardUrl)}&size=300`;
 
-            document.getElementById('modalContent').innerHTML = `
+           document.getElementById('modalContent').innerHTML = `
                 <div class="flex justify-between items-start mb-2">
                     <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none pr-2">${card.title}</h2>
-                    <div class="flex gap-2 shrink-0">
-                        <button onclick="downloadCard('${card.id}')" class="w-12 h-12 bg-slate-100 rounded-xl border border-slate-200 text-slate-600 hover:text-red-600 flex items-center justify-center transition" title="Stáhnout PDF">
-                            <i class="fas fa-file-pdf text-xl"></i>
-                        </button>
+                    
+                    <div class="flex gap-3 shrink-0 items-start">
+                        
+                        <div class="flex flex-col items-center gap-1">
+                            <button onclick="downloadCard('${card.id}')" class="w-12 h-12 bg-red-50 border-2 border-red-100 rounded-xl text-red-600 hover:bg-red-100 hover:border-red-200 transition flex items-center justify-center shadow-sm active:scale-95">
+                                <i class="fas fa-file-arrow-down text-lg"></i>
+                            </button>
+                            <span class="text-[8px] font-bold uppercase text-slate-400 tracking-wider">Tisk a stažení</span>
+                        </div>
+
                         <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-50 cursor-pointer hover:opacity-100 transition-opacity border border-slate-200 rounded-xl" onclick="zoomImage('${dynamicQrUrl}')">
                     </div>
                 </div>
@@ -407,6 +412,7 @@
                 </div>
 
                 ${card.image ? `<img src="${card.image}" class="w-full rounded-3xl shadow-xl mb-8" onclick="zoomImage('${card.image}')">` : ''}
+                
                 <div class="space-y-4 pb-6">
                     ${steps.map(s => `
                         <label class="flex items-center gap-5 p-5 ${s.critical ? 'bg-red-50 border-2 border-red-200' : 'bg-slate-50 border border-slate-200'} rounded-3xl cursor-pointer">
@@ -419,7 +425,8 @@
             document.getElementById('modal').classList.add('active');
             document.body.classList.add('no-scroll');
             checkCritical();
-        };
+
+           };
 
         window.filterAndSearchCards = () => {
             const term = document.getElementById('searchInput').value.toLowerCase();
