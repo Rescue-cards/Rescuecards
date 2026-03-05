@@ -422,14 +422,22 @@
             document.getElementById('modalContent').innerHTML = `
                 <div class="flex justify-between items-start mb-2">
                     <h2 class="text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tighter leading-none pr-2">${card.title}</h2>
-                    
-                    <div class="flex gap-3 shrink-0 items-start">
+
+                   <div class="flex gap-3 shrink-0 items-start">
+                        <div class="flex flex-col items-center gap-1">
+                            <button onclick="shareCard('${card.id}')" class="w-12 h-12 bg-blue-50 dark:bg-slate-700 border-2 border-blue-100 dark:border-slate-600 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-slate-600 transition flex items-center justify-center shadow-sm active:scale-95">
+                                <i class="fas fa-share-nodes text-lg"></i>
+                            </button>
+                            <span class="text-[8px] font-bold uppercase text-slate-400 tracking-wider">Sdílet</span>
+                        </div>
+
                         <div class="flex flex-col items-center gap-1">
                             <button onclick="downloadCard('${card.id}')" class="w-12 h-12 bg-red-50 dark:bg-slate-700 border-2 border-red-100 dark:border-slate-600 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-slate-600 transition flex items-center justify-center shadow-sm active:scale-95">
                                 <i class="fas fa-file-arrow-down text-lg"></i>
                             </button>
                             <span class="text-[8px] font-bold uppercase text-slate-400 tracking-wider">Tisk</span>
                         </div>
+
                         <img src="${dynamicQrUrl}" class="w-12 h-12 opacity-50 dark:opacity-80 cursor-pointer hover:opacity-100 transition-opacity border border-slate-200 dark:border-slate-600 rounded-xl bg-white" onclick="zoomImage('${dynamicQrUrl}')">
                     </div>
                 </div>
@@ -479,6 +487,38 @@
             btn.classList.remove('bg-white', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300', 'border-slate-200');
             btn.classList.add('active', 'bg-red-600', 'dark:bg-red-700', 'text-white', 'border-transparent');
             filterAndSearchCards();
+        };
+
+// --- FUNKCE PRO SDÍLENÍ KARTY ---
+        window.shareCard = async (id) => {
+            const card = myCards.find(c => c.id === id);
+            if (!card) return;
+
+            // Vygenerujeme si odkaz přímo na tuto konkrétní kartu
+            const baseUrl = window.location.origin + window.location.pathname;
+            const uniqueCardUrl = `${baseUrl}?id=${card.id}`;
+
+            const shareData = {
+                title: `RescueCards: ${card.title}`,
+                text: `Koukni na záchranářský postup: ${card.title}`,
+                url: uniqueCardUrl
+            };
+
+            try {
+                // Zkusíme zavolat nativní sdílecí okno zařízení
+                if (navigator.share) {
+                    await navigator.share(shareData);
+                } else {
+                    // Záloha pro staré počítače: Zkopíruje odkaz do schránky
+                    await navigator.clipboard.writeText(uniqueCardUrl);
+                    alert('Odkaz na kartu byl zkopírován do schránky. Můžeš ho kamkoliv vložit!');
+                }
+            } catch (err) {
+                // Pokud to uživatel zavře bez sdílení, nevypisujeme chybu
+                if (err.name !== 'AbortError') {
+                    console.error('Chyba při sdílení:', err);
+                }
+            }
         };
 
         window.downloadCard = (id) => {
