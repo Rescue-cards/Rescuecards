@@ -14,6 +14,8 @@
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
     
     <script>
         if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -21,7 +23,11 @@
         } else {
             document.documentElement.classList.remove('dark');
         }
+        
+        // Inicializace EmailJS - uživatel musí dodat své ID
+        // emailjs.init("YOUR_PUBLIC_KEY");
     </script>
+
 
     <style>
         .no-scroll { overflow: hidden !important; height: 100vh !important; }
@@ -77,8 +83,9 @@
                 <div id="appQrContainer" class="cursor-pointer bg-white p-1 rounded-md shadow-lg" title="QR kód aplikace" onclick="zoomImage(document.getElementById('mainAppQr').src)">
                     <img id="mainAppQr" class="w-8 h-8" alt="QR App">
                 </div>
-                <button onclick="openAdmin()" class="bg-red-800 dark:bg-red-700 hover:bg-red-900 dark:hover:bg-red-600 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition shadow-md">Přidat</button>
+                <button id="addCardBtn" onclick="openAdmin()" class="hidden bg-red-800 dark:bg-red-700 hover:bg-red-900 dark:hover:bg-red-600 px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs font-bold uppercase active:scale-95 transition shadow-md">Přidat</button>
             </div>
+
         </div>
     </nav>
 
@@ -145,9 +152,65 @@
                 <p class="text-[11px] font-bold opacity-90 uppercase tracking-wide">Identifikována kritická situace. Doporučujeme konzultovat se ZZS.</p>
             </div>
             <div class="p-8 overflow-y-auto bg-white dark:bg-slate-800" id="modalContent"></div>
+            <div id="commentSection" class="p-6 border-t dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hidden">
+                <h4 class="text-xs font-bold uppercase mb-2 text-slate-500">Komentáře schvalovatele</h4>
+                <div id="commentsList" class="space-y-2 mb-4"></div>
+                <div id="approverControls" class="hidden space-y-2">
+                    <textarea id="approverComment" placeholder="Napište komentář..." class="w-full p-3 rounded-xl border dark:border-slate-600 bg-white dark:bg-slate-800 text-sm outline-none"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="addCommentAndReject()" class="flex-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 p-2 rounded-lg text-xs font-bold uppercase">Odeslat komentář</button>
+                        <button onclick="approveCard()" class="flex-1 bg-green-600 text-white p-2 rounded-lg text-xs font-bold uppercase">Schválit kartu</button>
+                    </div>
+                </div>
+            </div>
             <button onclick="closeAll()" class="w-full bg-slate-800 dark:bg-slate-900 hover:bg-slate-700 dark:hover:bg-black text-white py-6 font-black uppercase tracking-widest text-sm shrink-0 transition">Zavřít kartu</button>
         </div>
     </div>
+
+    <!-- Login Overlay (Now only for explicit login) -->
+    <div id="loginOverlay" class="modal">
+        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="closeAll()"></div>
+        <div class="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center z-[310] relative mx-auto my-auto">
+            <i class="fas fa-heart-pulse text-red-600 text-5xl mb-6"></i>
+            <h2 class="text-2xl font-black mb-2 dark:text-white">RescueCards Hub</h2>
+            <p class="text-slate-500 dark:text-slate-400 text-sm mb-8">Přihlašte se pomocí svého @tul.cz účtu pro přístup k editoru a týmům.</p>
+            <button id="loginBtn" class="w-full bg-slate-900 dark:bg-red-700 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg hover:bg-slate-800 transition flex items-center justify-center gap-3">
+                <i class="fab fa-google"></i> Přihlásit se přes Google
+            </button>
+            <p id="loginError" class="text-red-500 text-xs mt-4 hidden"></p>
+            <button onclick="closeAll()" class="mt-4 text-xs font-bold uppercase text-slate-400">Zavřít</button>
+        </div>
+    </div>
+
+
+    <!-- Supervisor Dashboard Modal -->
+    <div id="supervisorModal" class="modal">
+        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="closeAll()"></div>
+        <div class="bg-white dark:bg-slate-800 w-11/12 md:max-w-2xl mx-auto rounded-3xl z-[110] overflow-hidden flex flex-col relative shadow-2xl border border-slate-300 dark:border-slate-700 transition-colors duration-300">
+            <div class="bg-slate-800 dark:bg-slate-900 text-white p-4 text-center">
+                <h3 class="font-bold uppercase text-xs tracking-widest">Správa týmů (Vedoucí)</h3>
+            </div>
+            <div class="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+                <div class="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-2xl">
+                    <h4 class="font-bold text-sm mb-3">Vytvořit nový tým</h4>
+                    <div class="flex gap-2">
+                        <input type="text" id="newTeamName" placeholder="Název týmu" class="flex-1 border dark:border-slate-600 p-2 rounded-lg bg-white dark:bg-slate-800 text-sm outline-none">
+                        <button onclick="createTeam()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase">Vytvořit</button>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-bold text-sm mb-3">Seznam týmů</h4>
+                    <div id="teamsList" class="space-y-3"></div>
+                </div>
+                <div>
+                    <h4 class="font-bold text-sm mb-3">Registrovaní studenti bez týmu</h4>
+                    <div id="unassignedStudents" class="space-y-2 text-xs"></div>
+                </div>
+            </div>
+            <button onclick="closeAll()" class="p-4 bg-slate-100 dark:bg-slate-900 text-xs font-bold uppercase">Zavřít</button>
+        </div>
+    </div>
+
 
     <div id="zoomOverlay" class="modal" onclick="closeZoom()">
         <div id="zoomImgContainer" class="min-h-screen w-full flex items-center justify-center p-4"></div>
@@ -155,7 +218,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, initializeFirestore, persistentLocalCache } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, initializeFirestore, persistentLocalCache, query, where, setDoc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCqHWdTWz5y212jzxmBwKw0oMI3d0Po59I",
@@ -168,11 +232,93 @@
 
         const app = initializeApp(firebaseConfig);
         const db = initializeFirestore(app, { localCache: persistentLocalCache() });
-        const ADMIN_PASSWORD = "155"; 
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
         
+        let currentUser = null;
+        let userProfile = null;
         let myCards = [];
         let currentFilter = 'all';
         let favorites = JSON.parse(localStorage.getItem('rescueFavs')) || [];
+
+        // --- AUTH LOGIKA ---
+        const loginBtn = document.getElementById('loginBtn');
+        if(loginBtn) loginBtn.onclick = async () => {
+            try {
+                const result = await signInWithPopup(auth, provider);
+                const email = result.user.email;
+                if (!email.endsWith('@tul.cz') && !email.endsWith('@student.tul.cz')) {
+                    await signOut(auth);
+                    document.getElementById('loginError').innerText = "Povoleny jsou pouze emaily @tul.cz.";
+                    document.getElementById('loginError').classList.remove('hidden');
+                    return;
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        };
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                // Načíst profíl z Firestore
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (!userDoc.exists()) {
+                    // Nový uživatel, výchozí role je student
+                    userProfile = {
+                        email: user.email,
+                        role: 'student', // Změňte ručně v DB pro supervisor/approver
+                        teamId: null
+                    };
+                    await setDoc(doc(db, "users", user.uid), userProfile);
+                } else {
+                    userProfile = userDoc.data();
+                }
+                document.getElementById('loginOverlay').classList.remove('active');
+                updateNavbarForUser();
+                loadCards();
+            } else {
+                currentUser = null;
+                userProfile = null;
+                updateNavbarForUser();
+                loadCards();
+            }
+        });
+
+        function updateNavbarForUser() {
+            const navRight = document.querySelector('nav div.max-w-4xl div.flex');
+            const existingProfile = document.getElementById('userProfileMenu');
+            const addBtn = document.getElementById('addCardBtn');
+
+            if(existingProfile) existingProfile.remove();
+
+            if (currentUser && userProfile) {
+                addBtn.classList.remove('hidden');
+                const profileHtml = `
+                    <div id="userProfileMenu" class="flex items-center gap-2 border-l border-red-500 dark:border-slate-700 pl-3">
+                        <div class="flex flex-col items-end hidden sm:flex">
+                            <span class="text-[10px] font-bold uppercase tracking-widest">${userProfile.role}</span>
+                            <span class="text-[8px] opacity-70">${currentUser.email}</span>
+                        </div>
+                        ${userProfile.role === 'supervisor' ? '<button onclick="openSupervisorDashboard()" class="bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">Vedoucí</button>' : ''}
+                        <button onclick="logout()" class="text-xs hover:text-red-200 transition"><i class="fas fa-sign-out-alt"></i></button>
+                    </div>
+                `;
+                navRight.insertAdjacentHTML('beforeend', profileHtml);
+            } else {
+                addBtn.classList.add('hidden');
+                const loginLink = `
+                    <div id="userProfileMenu" class="flex items-center gap-2 border-l border-red-500 dark:border-slate-700 pl-3">
+                        <button onclick="openLogin()" class="text-[10px] font-bold uppercase tracking-widest hover:text-red-200 transition">Přihlásit se</button>
+                    </div>
+                `;
+                navRight.insertAdjacentHTML('beforeend', loginLink);
+            }
+        }
+
+        window.openLogin = () => document.getElementById('loginOverlay').classList.add('active');
+        window.logout = () => signOut(auth);
+
 
         // --- TMAVÝ REŽIM (DARK MODE) LOGIKA ---
         const updateThemeIcon = () => {
@@ -265,9 +411,27 @@
 
         window.loadCards = async function() {
             try {
-                const querySnapshot = await getDocs(collection(db, "cards"));
-                myCards = [];
-                querySnapshot.forEach(doc => myCards.push({ id: doc.id, ...doc.data() }));
+                let q = query(collection(db, "cards"), orderBy("lastModified", "desc"));
+                const querySnapshot = await getDocs(q);
+                let allFetchedCards = [];
+                querySnapshot.forEach(doc => allFetchedCards.push({ id: doc.id, ...doc.data() }));
+                
+                // Filtrování viditelnosti
+                if (currentUser && userProfile) {
+                    if (userProfile.role === 'student') {
+                        myCards = allFetchedCards.filter(c => 
+                            c.status === 'published' || 
+                            c.teamId === userProfile.teamId
+                        );
+                    } else {
+                        myCards = allFetchedCards; // Supervisor/Approver vidí vše
+                    }
+                } else {
+                    // Veřejnost vidí pouze zveřejněné
+                    myCards = allFetchedCards.filter(c => c.status === 'published');
+                }
+
+
                 filterAndSearchCards();
 
                 const params = new URLSearchParams(window.location.search);
@@ -285,6 +449,7 @@
             }
         };
 
+
         function renderGrid(cards) {
             const container = document.getElementById('cardContainer');
             if (cards.length === 0) {
@@ -292,32 +457,50 @@
             } else {
                 container.innerHTML = cards.map(card => {
                     const isFav = favorites.includes(card.id);
+                    const canEdit = currentUser && userProfile && (
+                        userProfile.role === 'supervisor' || 
+                        userProfile.role === 'approver' || 
+                        (userProfile.role === 'student' && card.teamId === userProfile.teamId && (card.status === 'draft' || !card.status))
+                    );
+                    const statusTag = card.status && card.status !== 'published' ? `<span class="ml-2 text-[10px] font-bold px-2 py-0.5 rounded ${card.status === 'pending' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'} uppercase">${card.status === 'pending' ? 'Čeká' : 'Návrh'}</span>` : '';
+                    
                     return `
                         <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-md border-b-8 border-slate-200 dark:border-slate-700 p-6 flex flex-col h-full active:scale-[0.98] transition-all transform">
                             <div class="flex justify-between items-center mb-4">
-                                <span class="text-[10px] font-black uppercase text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded tracking-wide">${card.category || 'Vše'}</span>
+                                <span class="text-[10px] font-black uppercase text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded tracking-wide">${card.category || 'Vše'}${statusTag}</span>
                                 <div class="flex gap-4 items-center">
                                     <button onclick="toggleFavorite(event, '${card.id}')" class="heart-btn ${isFav ? 'fav-active' : 'text-slate-300 dark:text-slate-600 hover:text-red-400'}">
                                         <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
                                     </button>
-                                    <button onclick="editCard('${card.id}')" class="text-slate-300 dark:text-slate-600 hover:text-blue-500 transition"><i class="fas fa-edit text-sm"></i></button>
-                                    <button onclick="deleteCard('${card.id}')" class="text-slate-300 dark:text-slate-600 hover:text-red-500 transition"><i class="fas fa-trash-alt text-sm"></i></button>
+                                    ${canEdit ? `
+                                        <button onclick="editCard('${card.id}')" class="text-slate-300 dark:text-slate-600 hover:text-blue-500 transition"><i class="fas fa-edit text-sm"></i></button>
+                                        <button onclick="deleteCard('${card.id}')" class="text-slate-300 dark:text-slate-600 hover:text-red-500 transition"><i class="fas fa-trash-alt text-sm"></i></button>
+                                    ` : ''}
                                 </div>
                             </div>
                             ${card.image ? `<div class="mb-4 rounded-2xl overflow-hidden h-32 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 relative group"><img src="${card.image}" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"></div>` : ''}
                             <h3 class="text-xl font-black text-slate-800 dark:text-white leading-tight mb-2 uppercase">${card.title}</h3>
                             <p class="text-slate-500 dark:text-slate-400 text-sm mb-4 line-clamp-2 leading-snug flex-grow">${card.desc || ''}</p>
-                            <button onclick="openCard('${card.id}')" class="mt-auto w-full bg-slate-900 dark:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition">Otevřít</button>
+                            <div class="flex gap-2">
+                                <button onclick="openCard('${card.id}')" class="flex-1 bg-slate-900 dark:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition">Otevřít</button>
+                                ${currentUser && userProfile && userProfile.role === 'student' && card.teamId === userProfile.teamId && (card.status === 'draft' || !card.status) ? `
+                                    <button onclick="submitToReview('${card.id}')" class="bg-orange-600 text-white px-4 rounded-2xl font-black text-[10px] uppercase shadow-lg hover:bg-orange-700 transition">K recenzi</button>
+                                ` : ''}
+                            </div>
                         </div>
                     `;
                 }).join('');
+
             }
             document.getElementById('loadingState').style.display = 'none';
         }
 
+
         window.openAdmin = () => { 
-            const pass = prompt("Heslo:");
-            if(pass !== ADMIN_PASSWORD) return;
+            if (userProfile.role === 'student' && !userProfile.teamId) {
+                alert("Nejste v žádném týmu. Počkejte, až vás vedoucí přiřadí.");
+                return;
+            }
             document.getElementById('editId').value = ""; document.getElementById('adminTitle').innerText = "Nová karta";
             document.getElementById('newTitle').value = ""; document.getElementById('newDesc').value = "";
             document.getElementById('newTags').value = ""; document.getElementById('newImageFile').value = "";
@@ -326,8 +509,6 @@
         };
 
         window.editCard = id => {
-            const pass = prompt("Heslo:");
-            if(pass !== ADMIN_PASSWORD) return;
             const card = myCards.find(c => c.id === id);
             document.getElementById('editId').value = id;
             document.getElementById('newTitle').value = card.title;
@@ -341,10 +522,9 @@
         };
 
         window.deleteCard = async id => { 
-            const pass = prompt("Heslo:");
-            if(pass !== ADMIN_PASSWORD) return;
             if(confirm("Smazat?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); }
         };
+
 
         document.getElementById('saveBtn').onclick = async () => {
             const btn = document.getElementById('saveBtn');
@@ -360,6 +540,7 @@
                     critical: el.dataset.critical === "true"
                 }));
 
+                const currentCard = editId ? myCards.find(c => c.id === editId) : null;
                 const data = {
                     title: document.getElementById('newTitle').value,
                     category: document.getElementById('newCategory').value,
@@ -367,8 +548,13 @@
                     tags: document.getElementById('newTags').value.toLowerCase().split(',').map(t => t.trim()).filter(t => t !== ''),
                     steps_v2: steps_v2,
                     lastModified: new Date().toISOString(),
-                    backupType: editId ? "edit" : "new"
+                    backupType: editId ? "edit" : "new",
+                    status: editId ? (currentCard.status || 'draft') : 'draft',
+                    teamId: userProfile.teamId || 'admin',
+                    createdBy: currentUser.uid,
+                    comments: editId ? (currentCard.comments || []) : []
                 };
+
 
                 if (fileInput.files[0]) {
                     data.image = await new Promise(res => {
@@ -412,6 +598,7 @@
         window.openCard = id => {
             const card = myCards.find(c => c.id === id);
             if (!card) return;
+            window.currentCardId = id;
 
             const steps = card.steps_v2 || [];
             
@@ -421,7 +608,13 @@
 
             document.getElementById('modalContent').innerHTML = `
                 <div class="flex justify-between items-start mb-2">
-                    <h2 class="text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tighter leading-none pr-2">${card.title}</h2>
+                    <div>
+                        <h2 class="text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tighter leading-none pr-2">${card.title}</h2>
+                        <div class="flex gap-2 mt-1">
+                            <span class="text-[8px] font-bold uppercase bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-500">${card.teamId || 'System'}</span>
+                            ${card.status === 'published' || !card.status ? '' : `<span class="text-[8px] font-bold uppercase bg-orange-100 text-orange-700 px-2 py-0.5 rounded">V procesu schvalování</span>`}
+                        </div>
+                    </div>
 
                    <div class="flex gap-3 shrink-0 items-start">
                         <div class="flex flex-col items-center gap-1">
@@ -462,10 +655,211 @@
                     `).join('')}
                 </div>
             `;
+
+            // Zobrazit sekci komentářů pokud existují nebo pokud jsem schvalovatel
+            const commentSect = document.getElementById('commentSection');
+            const commentsList = document.getElementById('commentsList');
+            const appControls = document.getElementById('approverControls');
+            
+            commentsList.innerHTML = (card.comments || []).map(c => `
+                <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs mb-2">
+                    <p class="mb-1">${c.text}</p>
+                    <span class="opacity-50 text-[8px] uppercase font-bold">${new Date(c.timestamp).toLocaleString()}</span>
+                </div>
+            `).join('');
+
+            if ((card.comments && card.comments.length > 0) || userProfile.role === 'approver') {
+                commentSect.classList.remove('hidden');
+                if (userProfile.role === 'approver' && card.status === 'pending') {
+                    appControls.classList.remove('hidden');
+                } else {
+                    appControls.classList.add('hidden');
+                }
+            } else {
+                commentSect.classList.add('hidden');
+            }
+
             document.getElementById('modal').classList.add('active');
             document.body.classList.add('no-scroll');
             checkCritical();
         };
+
+        window.submitToReview = async id => {
+            if(confirm("Odeslat kartu ke schválení? Po odeslání ji do schválení nebudete moci měnit.")) {
+                await updateDoc(doc(db, "cards", id), { status: 'pending' });
+                loadCards();
+            }
+        };
+
+        window.approveCard = async () => {
+            if(confirm("Schválit kartu ke zveřejnění?")) {
+                await updateDoc(doc(db, "cards", window.currentCardId), { status: 'published' });
+                closeAll();
+                loadCards();
+            }
+        };
+
+        window.addCommentAndReject = async () => {
+            const comment = document.getElementById('approverComment').value;
+            if(!comment) return alert("Napište komentář.");
+            
+            const card = myCards.find(c => c.id === window.currentCardId);
+            const newComments = card.comments || [];
+            newComments.push({ text: comment, timestamp: new Date().toISOString() });
+
+            await updateDoc(doc(db, "cards", window.currentCardId), { 
+                comments: newComments,
+                status: 'draft' // Vrátit k úpravám
+            });
+
+            sendEmailToTeam(card.teamId, comment, card.title);
+            closeAll();
+            loadCards();
+        };
+
+        // --- DASHBOARD VEDOUCÍHO ---
+        window.openSupervisorDashboard = async () => {
+            document.getElementById('supervisorModal').classList.add('active');
+            loadTeams();
+            loadUnassignedStudents();
+        };
+
+        async function loadTeams() {
+            const snapshot = await getDocs(collection(db, "teams"));
+            const list = document.getElementById('teamsList');
+            list.innerHTML = "";
+            snapshot.forEach(d => {
+                const team = d.data();
+                const div = document.createElement('div');
+                div.className = "bg-white dark:bg-slate-800 p-4 rounded-xl border dark:border-slate-700 shadow-sm";
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <h5 class="font-bold text-sm text-red-600">${team.name}</h5>
+                        <button onclick="deleteTeam('${d.id}')" class="text-slate-400 hover:text-red-500 text-xs"><i class="fas fa-trash"></i></button>
+                    </div>
+                    <div class="space-y-1" id="members-${d.id}"></div>
+                `;
+                list.appendChild(div);
+                loadTeamMembers(d.id, team.members || []);
+            });
+        }
+
+        async function loadTeamMembers(teamId, memberIds) {
+            const container = document.getElementById(`members-${teamId}`);
+            if(!memberIds || memberIds.length === 0) {
+                container.innerHTML = `<span class="text-[9px] opacity-40 italic">Žádní členové</span>`;
+                return;
+            }
+            container.innerHTML = "";
+            memberIds.forEach(async uid => {
+                const userD = await getDoc(doc(db, "users", uid));
+                if(userD.exists()) {
+                    const u = userD.data();
+                    container.innerHTML += `<div class="text-[10px] flex justify-between bg-slate-50 dark:bg-slate-900 p-1 rounded">
+                        <span>${u.email}</span>
+                        <button onclick="removeFromTeam('${teamId}', '${uid}')" class="opacity-50 hover:opacity-100 text-red-500 font-bold px-1">×</button>
+                    </div>`;
+                }
+            });
+        }
+
+        async function loadUnassignedStudents() {
+            const q = query(collection(db, "users"), where("teamId", "==", null), where("role", "==", "student"));
+            const snapshot = await getDocs(q);
+            const container = document.getElementById('unassignedStudents');
+            container.innerHTML = "";
+            
+            const teamsSnapshot = await getDocs(collection(db, "teams"));
+            let teamsOptions = `<option value="">Přiřadit k týmu...</option>`;
+            teamsSnapshot.forEach(td => {
+                teamsOptions += `<option value="${td.id}">${td.data().name}</option>`;
+            });
+
+            if(snapshot.empty) {
+                container.innerHTML = `<p class="opacity-50 italic">Žádní studenti k přiřazení.</p>`;
+            }
+
+            snapshot.forEach(d => {
+                const u = d.data();
+                container.innerHTML += `
+                    <div class="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                        <span>${u.email}</span>
+                        <select onchange="assignToTeam('${d.id}', this.value)" class="text-[10px] bg-white dark:bg-slate-800 border rounded p-1 outline-none">
+                            ${teamsOptions}
+                        </select>
+                    </div>
+                `;
+            });
+        }
+
+        window.createTeam = async () => {
+            const name = document.getElementById('newTeamName').value;
+            if(!name) return;
+            await addDoc(collection(db, "teams"), { name, members: [] });
+            document.getElementById('newTeamName').value = "";
+            loadTeams();
+        };
+
+        window.assignToTeam = async (uid, teamId) => {
+            if(!teamId) return;
+            const teamDoc = await getDoc(doc(db, "teams", teamId));
+            const members = teamDoc.data().members || [];
+            if(!members.includes(uid)) members.push(uid);
+            
+            await updateDoc(doc(db, "teams", teamId), { members });
+            await updateDoc(doc(db, "users", uid), { teamId });
+            openSupervisorDashboard();
+        };
+
+        window.deleteTeam = async (id) => {
+            if(!confirm("Smazat tým? Členové budou uvolněni.")) return;
+            const teamDoc = await getDoc(doc(db, "teams", id));
+            const members = teamDoc.data().members || [];
+            for(let uid of members) {
+                await updateDoc(doc(db, "users", uid), { teamId: null });
+            }
+            await deleteDoc(doc(db, "teams", id));
+            loadTeams();
+            loadUnassignedStudents();
+        };
+
+        window.removeFromTeam = async (teamId, uid) => {
+            const teamDoc = await getDoc(doc(db, "teams", teamId));
+            const members = (teamDoc.data().members || []).filter(m => m !== uid);
+            await updateDoc(doc(db, "teams", teamId), { members });
+            await updateDoc(doc(db, "users", uid), { teamId: null });
+            openSupervisorDashboard();
+        };
+
+        async function sendEmailToTeam(teamId, comment, cardTitle) {
+            console.log(`Posílám mail týmu ${teamId}: ${comment}`);
+            try {
+                const teamDoc = await getDoc(doc(db, "teams", teamId));
+                if (!teamDoc.exists()) return;
+                
+                const memberUids = teamDoc.data().members || [];
+                const emails = [];
+                for (let uid of memberUids) {
+                    const uDoc = await getDoc(doc(db, "users", uid));
+                    if (uDoc.exists()) emails.push(uDoc.data().email);
+                }
+
+                if (emails.length === 0) return;
+
+                // Odkomentujte a vložte své ID pro aktivaci EmailJS
+                /*
+                emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
+                    to_emails: emails.join(", "),
+                    card_title: cardTitle,
+                    comment: comment
+                }).then(() => console.log("Email odeslán"), (err) => console.error("EmailJS chyba:", err));
+                */
+            } catch (err) {
+                console.error("Chyba při přípravě emailu:", err);
+            }
+        }
+
+
 
         window.filterAndSearchCards = () => {
             const term = document.getElementById('searchInput').value.toLowerCase();
