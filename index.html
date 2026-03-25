@@ -833,15 +833,19 @@
         window.approveCard = async () => {
             if(!confirm("Schválit kartu ke zveřejnění?")) return;
             try {
+                console.log("Pokus o schválení karty:", window.currentCardId, "Uživatel:", currentUser.uid, "Role:", userProfile.role);
                 await updateDoc(doc(db, "cards", window.currentCardId), { status: 'published' });
                 closeAll();
                 loadCards();
                 alert("Karta byla úspěšně zveřejněna.");
             } catch (err) {
-                console.error(err);
-                alert("Chyba při schvalování (zkontrolujte konzoli nebo práva): " + err.message);
+                console.error("Detail chyby schvalování:", err);
+                let msg = err.message;
+                if (err.code === 'permission-denied') msg = "Nedostatečná oprávnění v databázi (Security Rules). Prosím vložte pravidla, která jsem vám poslal.";
+                alert("Chyba při schvalování: " + msg);
             }
         };
+
 
         window.addCommentAndReject = async () => {
             const comment = document.getElementById('approverComment').value;
@@ -991,10 +995,13 @@
                 const inactiveAdm = "bg-red-50 dark:bg-red-900/20 text-red-400";
 
                 container.innerHTML += `
-                    <div class="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700 rounded-lg group">
+                    <div class="flex justify-between items-center p-2 rounded-lg group mb-1 ${isMe ? 'bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-400' : 'bg-slate-50 dark:bg-slate-700'}">
                         <div class="flex flex-col">
-                            <span class="font-bold">${u.email}</span>
-                            <span class="opacity-50 uppercase tracking-tighter" style="font-size: 8px;">Tým: ${u.teamId || 'Žádný'}</span>
+                            <span class="font-bold flex items-center gap-2">
+                                ${u.email}
+                                ${isMe ? '<span class="text-[8px] bg-blue-500 text-white px-1 rounded uppercase">To jste vy</span>' : ''}
+                            </span>
+                            <span class="opacity-50 uppercase tracking-tighter" style="font-size: 8px;">Role: ${r} | Tým: ${u.teamId || 'Žádný'} | ID: ${d.id}</span>
                         </div>
                         <div class="flex gap-1 items-center">
                             <button onclick="quickSetRole('${d.id}', 'student')" class="${r === 'student' ? activeS : inactiveS} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Student</button>
