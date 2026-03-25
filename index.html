@@ -237,6 +237,13 @@
                     <h4 class="font-bold text-sm mb-3">Seznam registrovaných uživatelů</h4>
                     <div id="allUsersList" class="space-y-2 text-xs"></div>
                 </div>
+                <div class="bg-red-50 dark:bg-red-900/10 p-4 rounded-2xl border border-red-100 dark:border-red-900/30">
+                    <h4 class="font-bold text-sm mb-3 text-red-600 dark:text-red-400 text-center uppercase tracking-widest">Nástroje pro správce</h4>
+                    <button onclick="migrateAllCardsToPending(event)" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl text-xs font-bold uppercase shadow-lg transition active:scale-95">
+                        <i class="fas fa-exclamation-triangle mr-2"></i> Přesunout VŠECHNY karty do stavu 'Čeká'
+                    </button>
+                    <p class="text-[9px] text-red-500 mt-2 text-center">Tato akce změní stav všech karet (i zveřejněných) na 'pending'.</p>
+                </div>
             </div>
             <button onclick="closeAll()" class="p-4 bg-slate-100 dark:bg-slate-900 text-xs font-bold uppercase">Zavřít</button>
         </div>
@@ -917,6 +924,33 @@
             if(confirm(`Změnit roli na ${role}?`)) {
                 await updateDoc(doc(db, "users", uid), { role: role });
                 loadAllUsers();
+            }
+        };
+
+        // --- MIGRACE DAT ---
+        window.migrateAllCardsToPending = async (e) => {
+            if(!confirm("OPRAVDU chcete nyní přesunout VŠECHNY existující karty do procesu schvalování? Tato akce je nevratná a změní stav všech karet.")) return;
+            
+            const btn = e.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Probíhá migrace...';
+
+            try {
+                const snapshot = await getDocs(collection(db, "cards"));
+                let count = 0;
+                const promises = [];
+                snapshot.forEach(d => {
+                    promises.push(updateDoc(doc(db, "cards", d.id), { status: 'pending' }));
+                    count++;
+                });
+                await Promise.all(promises);
+                alert(`Migrace úspěšně dokončena. Celkem ${count} karet bylo přesunuto do stavu 'pending'.`);
+                location.reload();
+            } catch (err) {
+                alert("Chyba při migraci: " + err.message);
+                btn.disabled = false;
+                btn.innerHTML = originalText;
             }
         };
 
