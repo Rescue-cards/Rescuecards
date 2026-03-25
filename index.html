@@ -827,6 +827,7 @@
             const commentSect = document.getElementById('commentSection');
             const commentsList = document.getElementById('commentsList');
             const appControls = document.getElementById('approverControls');
+            const userRole = userProfile ? userProfile.role : 'public';
             
             commentsList.innerHTML = (card.comments || []).map(c => `
                 <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs mb-2">
@@ -834,10 +835,11 @@
                     <span class="opacity-50 text-[8px] uppercase font-bold">${new Date(c.timestamp).toLocaleString()}</span>
                 </div>
             `).join('');
-
-            if ((card.comments && card.comments.length > 0) || userProfile.role === 'approver' || userProfile.role === 'admin') {
+            
+            // Komentáře a ovládací prvky schvalovatele jen pro oprávněné
+            if ((card.comments && card.comments.length > 0) || userRole === 'approver' || userRole === 'admin') {
                 commentSect.classList.remove('hidden');
-                if ((userProfile.role === 'approver' || userProfile.role === 'admin') && card.status === 'pending') {
+                if ((userRole === 'approver' || userRole === 'admin') && card.status === 'pending') {
                     appControls.classList.remove('hidden');
                 } else {
                     appControls.classList.add('hidden');
@@ -848,6 +850,12 @@
 
             document.getElementById('modal').classList.add('active');
             document.body.classList.add('no-scroll');
+            
+            // Resetovat checkboxy při každém otevření pro čistý start (pro veřejnost)
+            if (!currentUser) {
+                document.querySelectorAll('#modal input[type="checkbox"]').forEach(i => i.checked = false);
+            }
+
             checkCritical();
         };
 
