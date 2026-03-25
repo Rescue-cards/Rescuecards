@@ -241,8 +241,21 @@
                     </div>
                 </div>
                 <div>
-                    <h4 class="font-bold text-sm mb-3">Seznam registrovaných uživatelů</h4>
-                    <div id="allUsersList" class="space-y-2 text-xs"></div>
+                    <h4 class="font-bold text-xs uppercase tracking-widest text-slate-400 mb-4 border-b pb-2">Seznam uživatelů</h4>
+                    <div class="space-y-6">
+                        <div>
+                            <h5 class="font-bold text-sm mb-3 flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                                <i class="fas fa-user-shield"></i> Vyučující a Správci
+                            </h5>
+                            <div id="staffUsersList" class="space-y-2 text-xs"></div>
+                        </div>
+                        <div>
+                            <h5 class="font-bold text-sm mb-3 flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                <i class="fas fa-users"></i> Studenti
+                            </h5>
+                            <div id="studentUsersList" class="space-y-2 text-xs"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30">
                     <h4 class="font-bold text-sm mb-2 text-blue-600 dark:text-blue-400 text-center uppercase tracking-widest">Správa dat a zálohy</h4>
@@ -492,18 +505,25 @@
             try {
                 let q;
                 if (currentUser) {
+                    // Pro přihlášené řadíme rovnou v DB (vyžaduje index pro složitější filtry, ale základ funguje)
                     q = query(collection(db, "cards"), orderBy("lastModified", "desc"));
                 } else {
-                    // Pro veřejnost musíme dotaz filtrovat přímo v databázi (Security Rules)
-                    q = query(collection(db, "cards"), where("status", "==", "published"), orderBy("lastModified", "desc"));
+                    // Pro veřejnost použijeme nejjednodušší dotaz k zamezení chyb s indexy
+                    // Security rules povolí pouze 'published'
+                    q = query(collection(db, "cards"), where("status", "==", "published"));
                 }
                 
                 const querySnapshot = await getDocs(q);
                 let allFetchedCards = [];
-
                 querySnapshot.forEach(doc => allFetchedCards.push({ id: doc.id, ...doc.data() }));
                 
-                // Filtrování viditelnosti
+                // Pokud jsme veřejnost, seřadíme si to v paměti (Safe fallback)
+                if (!currentUser) {
+                    allFetchedCards.sort((a,b) => (b.lastModified || 0) - (a.lastModified || 0));
+                }
+
+                // Filtrování viditelnosti (redundantní díky dotazu výše, ale bezpečné)
+
                 if (currentUser && userProfile) {
                     if (userProfile.role === 'student') {
                         myCards = allFetchedCards.filter(c => 
@@ -983,48 +1003,64 @@
         };
 
         async function loadAllUsers() {
-            const container = document.getElementById('allUsersList');
-            container.innerHTML = '<div class="loader"></div>';
+            const staffContainer = document.getElementById('staffUsersList');
+            const studentContainer = document.getElementById('studentUsersList');
+            if(!staffContainer || !studentContainer) return;
             
-            const snapshot = await getDocs(collection(db, "users"));
-            container.innerHTML = "";
-            snapshot.forEach(d => {
-                const u = d.data();
-                const r = u.role || 'student';
+            staffContainer.innerHTML = '<div class="loader"></div>';
+            studentContainer.innerHTML = "";
+            
+            try {
+                const snapshot = await getDocs(collection(db, "users"));
+                staffContainer.innerHTML = "";
+                studentContainer.innerHTML = "";
                 
-                const activeS = "bg-slate-600 text-white shadow-sm";
-                const activeV = "bg-blue-600 text-white shadow-sm";
-                const activeA = "bg-purple-600 text-white shadow-sm";
-                const activeAdm = "bg-red-600 text-white shadow-sm";
+                snapshot.forEach(d => {
+                    const u = d.data();
+                    const r = u.role || 'student';
+                    const isMe = currentUser && d.id === currentUser.uid;
+                    
+                    const activeS = "bg-slate-600 text-white shadow-sm";
+                    const activeV = "bg-blue-600 text-white shadow-sm";
+                    const activeA = "bg-purple-600 text-white shadow-sm";
+                    const activeAdm = "bg-red-600 text-white shadow-sm";
 
-                const inactiveS = "bg-slate-100 dark:bg-slate-800 text-slate-400";
-                const inactiveV = "bg-blue-50 dark:bg-blue-900/20 text-blue-400";
-                const inactiveA = "bg-purple-50 dark:bg-purple-900/20 text-purple-400";
-                const inactiveAdm = "bg-red-50 dark:bg-red-900/20 text-red-400";
+                    const inactiveS = "bg-slate-100 dark:bg-slate-800 text-slate-400";
+                    const inactiveV = "bg-blue-50 dark:bg-blue-900/20 text-blue-400";
+                    const inactiveA = "bg-purple-50 dark:bg-purple-900/20 text-purple-400";
+                    const inactiveAdm = "bg-red-50 dark:bg-red-900/20 text-red-400";
 
-                container.innerHTML += `
-                    <div class="flex justify-between items-center p-2 rounded-lg group mb-1 ${isMe ? 'bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-400' : 'bg-slate-50 dark:bg-slate-700'}">
-                        <div class="flex flex-col">
-                            <span class="font-bold flex items-center gap-2">
-                                ${u.email}
-                                ${isMe ? '<span class="text-[8px] bg-blue-500 text-white px-1 rounded uppercase">To jste vy</span>' : ''}
-                            </span>
-                            <span class="opacity-50 uppercase tracking-tighter" style="font-size: 8px;">Role: ${r} | Tým: ${u.teamId || 'Žádný'} | ID: ${d.id}</span>
+                    const html = `
+                        <div class="flex justify-between items-center p-2 rounded-lg group mb-1 ${isMe ? 'bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-400' : 'bg-slate-50 dark:bg-slate-700'}">
+                            <div class="flex flex-col text-[10px]">
+                                <span class="font-bold flex items-center gap-2">
+                                    ${u.email}
+                                    ${isMe ? '<span class="text-[7px] bg-blue-500 text-white px-1 rounded uppercase">To jste vy</span>' : ''}
+                                </span>
+                                <span class="opacity-50 uppercase tracking-tighter" style="font-size: 7px;">Role: ${r} | Tým: ${u.teamId || 'Žádný'} | ID: ${d.id}</span>
+                            </div>
+                            <div class="flex gap-1 items-center">
+                                <button onclick="quickSetRole('${d.id}', 'student')" class="${r === 'student' ? activeS : inactiveS} px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition-all">Student</button>
+                                <button onclick="quickSetRole('${d.id}', 'supervisor')" class="${r === 'supervisor' ? activeV : inactiveV} px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition-all">Vyučující</button>
+                                <button onclick="quickSetRole('${d.id}', 'approver')" class="${r === 'approver' ? activeA : inactiveA} px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition-all">Schvalovatel</button>
+                                ${userProfile.role === 'admin' ? `
+                                    <button onclick="quickSetRole('${d.id}', 'admin')" class="${r === 'admin' ? activeAdm : inactiveAdm} px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition-all">Admin</button>
+                                    <button onclick="deleteUser('${d.id}', '${u.email}')" class="ml-1 text-slate-400 hover:text-red-600 transition p-1"><i class="fas fa-trash-alt"></i></button>
+                                ` : ''}
+                            </div>
                         </div>
-                        <div class="flex gap-1 items-center">
-                            <button onclick="quickSetRole('${d.id}', 'student')" class="${r === 'student' ? activeS : inactiveS} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Student</button>
-                            <button onclick="quickSetRole('${d.id}', 'supervisor')" class="${r === 'supervisor' ? activeV : inactiveV} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Vyučující</button>
-                            <button onclick="quickSetRole('${d.id}', 'approver')" class="${r === 'approver' ? activeA : inactiveA} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Schvalovatel</button>
-                            ${userProfile.role === 'admin' ? `
-                                <button onclick="quickSetRole('${d.id}', 'admin')" class="${r === 'admin' ? activeAdm : inactiveAdm} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Admin</button>
-                                <button onclick="deleteUser('${d.id}', '${u.email}')" class="ml-1 text-slate-400 hover:text-red-600 transition p-1"><i class="fas fa-trash-alt"></i></button>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
-            });
+                    `;
+
+                    if (r === 'student') studentContainer.innerHTML += html;
+                    else staffContainer.innerHTML += html;
+                });
+            } catch (err) {
+                staffContainer.innerHTML = "Chyba načítání.";
+                console.error(err);
+            }
 
         }
+
 
         window.updateUserRole = async () => {
             const emailInp = document.getElementById('userEmailToRole').value.trim().toLowerCase();
