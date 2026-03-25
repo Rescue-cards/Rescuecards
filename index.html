@@ -490,9 +490,17 @@
 
         window.loadCards = async function() {
             try {
-                let q = query(collection(db, "cards"), orderBy("lastModified", "desc"));
+                let q;
+                if (currentUser) {
+                    q = query(collection(db, "cards"), orderBy("lastModified", "desc"));
+                } else {
+                    // Pro veřejnost musíme dotaz filtrovat přímo v databázi (Security Rules)
+                    q = query(collection(db, "cards"), where("status", "==", "published"), orderBy("lastModified", "desc"));
+                }
+                
                 const querySnapshot = await getDocs(q);
                 let allFetchedCards = [];
+
                 querySnapshot.forEach(doc => allFetchedCards.push({ id: doc.id, ...doc.data() }));
                 
                 // Filtrování viditelnosti
