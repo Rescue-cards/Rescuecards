@@ -279,7 +279,7 @@
         // Zde můžete dopsat maily vyučujících a schvalovatelů
         const SPECIAL_ROLES = {
             'willdohoda1212@gmail.com': 'supervisor', 
-            'Daniel.seps@tul.cz': 'admin', // Super-admin
+            'daniel.seps@tul.cz': 'admin', // Super-admin
             // 'schvalovatel@tul.cz': 'approver',
         };
 
@@ -314,7 +314,8 @@
                 const userDocRef = doc(db, "users", user.uid);
                 const userDoc = await getDoc(userDocRef);
                 
-                let roleToSet = SPECIAL_ROLES[user.email] || 'student';
+                const emailLower = user.email.toLowerCase();
+                let roleToSet = SPECIAL_ROLES[emailLower] || 'student';
 
                 if (!userDoc.exists()) {
                     userProfile = {
@@ -326,8 +327,8 @@
                 } else {
                     userProfile = userDoc.data();
                     // Pokud je email v seznamu, ale v DB má jinou roli, aktualizovat
-                    if (SPECIAL_ROLES[user.email] && userProfile.role !== SPECIAL_ROLES[user.email]) {
-                        userProfile.role = SPECIAL_ROLES[user.email];
+                    if (SPECIAL_ROLES[emailLower] && userProfile.role !== SPECIAL_ROLES[emailLower]) {
+                        userProfile.role = SPECIAL_ROLES[emailLower];
                         await updateDoc(userDocRef, { role: userProfile.role });
                     }
                 }
@@ -569,6 +570,7 @@
 
 
         window.openAdmin = () => { 
+            const isPowerUser = userProfile.role === 'admin' || userProfile.role === 'supervisor' || userProfile.role === 'approver';
             if (userProfile.role === 'student' && !userProfile.teamId) {
                 alert("Nejste v žádném týmu. Počkejte, až vás vedoucí přiřadí.");
                 return;
