@@ -234,6 +234,8 @@
         const db = initializeFirestore(app, { localCache: persistentLocalCache() });
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+
         
         let currentUser = null;
         let userProfile = null;
@@ -421,6 +423,7 @@
                     if (userProfile.role === 'student') {
                         myCards = allFetchedCards.filter(c => 
                             c.status === 'published' || 
+                            c.status === 'pending' ||
                             c.teamId === userProfile.teamId
                         );
                     } else {
