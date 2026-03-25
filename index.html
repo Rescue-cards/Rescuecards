@@ -127,6 +127,12 @@
                 </div>
                 <input type="text" id="newDesc" placeholder="Popis" class="w-full border dark:border-slate-600 p-3 rounded-xl bg-slate-50 dark:bg-slate-700 dark:text-white outline-none">
                 <input type="text" id="newTags" placeholder="Tagy" class="w-full border dark:border-slate-600 p-3 rounded-xl bg-slate-50 dark:bg-slate-700 dark:text-white italic outline-none">
+                
+                <div id="adminTeamSelectSection" class="hidden bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border dark:border-slate-700 mb-2">
+                    <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">Přiřadit k týmu (Admin):</label>
+                    <select id="editTeamId" class="w-full border dark:border-slate-600 p-2 rounded-lg bg-white dark:bg-slate-800 text-sm outline-none"></select>
+                </div>
+
                 <input type="file" id="newImageFile" accept="image/*" class="w-full text-xs border dark:border-slate-600 p-4 rounded-xl dark:text-slate-300">
                 <div id="adminStepsList" class="space-y-2"></div>
                 <div class="flex gap-2">
@@ -238,12 +244,12 @@
                     <h4 class="font-bold text-sm mb-3">Seznam registrovaných uživatelů</h4>
                     <div id="allUsersList" class="space-y-2 text-xs"></div>
                 </div>
-                <div class="bg-red-50 dark:bg-red-900/10 p-4 rounded-2xl border border-red-100 dark:border-red-900/30">
-                    <h4 class="font-bold text-sm mb-3 text-red-600 dark:text-red-400 text-center uppercase tracking-widest">Nástroje pro správce</h4>
-                    <button onclick="migrateAllCardsToPending(event)" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl text-xs font-bold uppercase shadow-lg transition active:scale-95">
-                        <i class="fas fa-exclamation-triangle mr-2"></i> Přesunout VŠECHNY karty do stavu 'Čeká'
+                <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30">
+                    <h4 class="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400 text-center uppercase tracking-widest">Správa dat a zálohy</h4>
+                    <button onclick="createSystemSnapshot(event)" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-xs font-bold uppercase shadow-lg transition active:scale-95">
+                        <i class="fas fa-camera-retro mr-2"></i> Vytvořit systémový snímek (Snapshot)
                     </button>
-                    <p class="text-[9px] text-red-500 mt-2 text-center">Tato akce změní stav všech karet (i zveřejněných) na 'pending'.</p>
+                    <p class="text-[9px] text-blue-500 mt-2 text-center italic">Zálohuje všechny karty a týmy do Firestore. Doporučeno před velkými změnami.</p>
                 </div>
             </div>
             <button onclick="closeAll()" class="p-4 bg-slate-100 dark:bg-slate-900 text-xs font-bold uppercase">Zavřít</button>
@@ -569,28 +575,55 @@
         }
 
 
-        window.openAdmin = () => { 
+        window.openAdmin = async () => { 
             const isPowerUser = userProfile.role === 'admin' || userProfile.role === 'supervisor' || userProfile.role === 'approver';
             if (userProfile.role === 'student' && !userProfile.teamId) {
                 alert("Nejste v žádném týmu. Počkejte, až vás vedoucí přiřadí.");
                 return;
             }
+
+            // Pokud jsem admin, načíst týmy pro výběr
+            if (isPowerUser) {
+                document.getElementById('adminTeamSelectSection').classList.remove('hidden');
+                const tSnap = await getDocs(collection(db, "teams"));
+                let html = `<option value="admin">Administrátor (System)</option>`;
+                tSnap.forEach(td => html += `<option value="${td.id}">${td.data().name}</option>`);
+                document.getElementById('editTeamId').innerHTML = html;
+            } else {
+                document.getElementById('adminTeamSelectSection').classList.add('hidden');
+            }
+
             document.getElementById('editId').value = ""; document.getElementById('adminTitle').innerText = "Nová karta";
             document.getElementById('newTitle').value = ""; document.getElementById('newDesc').value = "";
             document.getElementById('newTags').value = ""; document.getElementById('newImageFile').value = "";
             document.getElementById('adminStepsList').innerHTML = ""; addStepField(false);
+            
+            // Výchozí tým
+            if (isPowerUser) document.getElementById('editTeamId').value = "admin";
+
             document.getElementById('adminModal').classList.add('active'); document.body.classList.add('no-scroll');
         };
 
-        window.editCard = id => {
+        window.editCard = async id => {
             const card = myCards.find(c => c.id === id);
             if (!card) return;
+
+            const isPowerUser = userProfile.role === 'admin' || userProfile.role === 'supervisor' || userProfile.role === 'approver';
 
             // Pojistka proti editaci zveřejněné karty (pouze pokud nejsem super-admin co chce fakt něco opravit narychlo, 
             // ale user chtěl aby se to spíš stahovalo)
             if (card.status === 'published') {
                 alert("Zveřejněnou kartu nelze upravovat. Nejdříve ji stáhněte z veřejného prostoru.");
                 return;
+            }
+
+            if (isPowerUser) {
+                document.getElementById('adminTeamSelectSection').classList.remove('hidden');
+                const tSnap = await getDocs(collection(db, "teams"));
+                let html = `<option value="admin">Administrátor (System)</option>`;
+                tSnap.forEach(td => html += `<option value="${td.id}">${td.data().name}</option>`);
+                document.getElementById('editTeamId').innerHTML = html;
+                document.getElementById('editTeamId').value = card.teamId || "admin";
             }
 
             document.getElementById('editId').value = id;
@@ -645,7 +678,7 @@
                     lastModified: new Date().toISOString(),
                     backupType: editId ? "edit" : "new",
                     status: editId ? (currentCard.status || 'draft') : 'draft',
-                    teamId: userProfile.teamId || 'admin',
+                    teamId: (userProfile.role === 'admin' || userProfile.role === 'supervisor' || userProfile.role === 'approver') ? document.getElementById('editTeamId').value : (userProfile.teamId || 'admin'),
                     createdBy: currentUser.uid,
                     comments: editId ? (currentCard.comments || []) : []
                 };
@@ -963,28 +996,34 @@
             }
         };
 
-        // --- MIGRACE DAT ---
-        window.migrateAllCardsToPending = async (e) => {
-            if(!confirm("OPRAVDU chcete nyní přesunout VŠECHNY existující karty do procesu schvalování? Tato akce je nevratná a změní stav všech karet.")) return;
+        // --- MIGRACE A ZÁLOHY ---
+        window.createSystemSnapshot = async (e) => {
+            if(!confirm("Vytvořit systémový snímek? Tato akce zálohuje všechny aktuální karty a týmy. Můžete ji použít pro obnovu v případě chyby (vyžaduje zásah v konzoli).")) return;
             
             const btn = e.currentTarget;
             const originalText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Probíhá migrace...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Zálohuji systém...';
 
             try {
-                const snapshot = await getDocs(collection(db, "cards"));
-                let count = 0;
-                const promises = [];
-                snapshot.forEach(d => {
-                    promises.push(updateDoc(doc(db, "cards", d.id), { status: 'pending' }));
-                    count++;
-                });
-                await Promise.all(promises);
-                alert(`Migrace úspěšně dokončena. Celkem ${count} karet bylo přesunuto do stavu 'pending'.`);
-                location.reload();
+                const cardsSnap = await getDocs(collection(db, "cards"));
+                const teamsSnap = await getDocs(collection(db, "teams"));
+                
+                const cards = []; cardsSnap.forEach(d => cards.push({id: d.id, ...d.data()}));
+                const teams = []; teamsSnap.forEach(d => teams.push({id: d.id, ...d.data()}));
+
+                const snapshot = {
+                    timestamp: new Date().toISOString(),
+                    backupBy: currentUser.email,
+                    data: { cards, teams }
+                };
+
+                await addDoc(collection(db, "system_snapshots"), snapshot);
+                alert(`Záloha byla úspěšně vytvořena a uložena do Firestore (system_snapshots). Celkem ${cards.length} karet a ${teams.length} týmů.`);
+                
             } catch (err) {
-                alert("Chyba při migraci: " + err.message);
+                alert("Chyba při zálohování: " + err.message);
+            } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
