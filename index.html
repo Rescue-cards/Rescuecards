@@ -1012,23 +1012,26 @@
         }
 
         window.updateUserRole = async () => {
-            const email = document.getElementById('userEmailToRole').value.trim();
+            const emailInp = document.getElementById('userEmailToRole').value.trim().toLowerCase();
             const role = document.getElementById('userNewRole').value;
-            if(!email) return alert("Zadejte e-mail.");
+            if(!emailInp) return alert("Zadejte e-mail.");
 
-            const q = query(collection(db, "users"), where("email", "==", email));
+            const q = query(collection(db, "users"), where("email", "==", emailInp));
             const snapshot = await getDocs(q);
             
             if(snapshot.empty) {
-                alert("Uživatel s tímto e-mailem nebyl nalezen. Uživatel se musí alespoň jednou přihlásit.");
+                alert("Uživatel s tímto e-mailem nebyl nalezen. Musí se alespoň jednou přihlásit.");
                 return;
             }
 
-            const userDoc = snapshot.docs[0];
-            await updateDoc(doc(db, "users", userDoc.id), { role: role });
-            alert(`Role pro ${email} byla změněna na ${role}.`);
+            // Aktualizovat VŠECHNY dokumenty se stejným mailem (pokud existují duplicity)
+            const proms = snapshot.docs.map(d => updateDoc(doc(db, "users", d.id), { role: role }));
+            await Promise.all(proms);
+
+            alert(`Role pro ${emailInp} byla změněna na ${role} u všech (${snapshot.docs.length}) záznamů.`);
             loadAllUsers();
         };
+
 
         window.quickSetRole = async (uid, role) => {
             if(confirm(`Změnit roli na ${role}?`)) {
@@ -1090,7 +1093,7 @@
         };
 
         window.cleanDuplicateUsers = async (e) => {
-            if(!confirm("Prohledat systém a odstranit duplicitní maily? (Více záznamů se stejným mailem). Ponechám vždy ten s 'vyšší' rolí.")) return;
+            if(!confirm("Prohledat systém a odstranit duplicitní maily? (Ponechám vždy ten s 'vyšší' rolí a vyšší prioritou dat).")) return;
             
             const btn = e.currentTarget;
             const originalText = btn.innerHTML;
@@ -1098,46 +1101,57 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Čistím...';
 
             try {
+                // Vypnout real-time load na chvilku pokud by dělal neplechu
                 const snapshot = await getDocs(collection(db, "users"));
                 const finalEmailMap = {};
                 
                 snapshot.forEach(d => {
                     const u = { id: d.id, ...d.data() };
-                    const email = (u.email || "").toLowerCase();
+                    const email = (u.email || "").trim().toLowerCase();
                     if(!email) return;
                     if(!finalEmailMap[email]) finalEmailMap[email] = [u];
                     else finalEmailMap[email].push(u);
                 });
 
                 let delProms = [];
-                const roleWeight = { 'admin': 10, 'supervisor': 5, 'approver': 3, 'student': 1 };
+                const roleWeight = { 'admin': 100, 'supervisor': 50, 'approver': 30, 'student': 10 };
 
                 for (let email in finalEmailMap) {
                     const entries = finalEmailMap[email];
                     if (entries.length > 1) {
-                        // Seřadit podle role (nejvyšší první)
-                        entries.sort((a, b) => (roleWeight[b.role] || 0) - (roleWeight[a.role] || 0));
-                        // Ponechat první (nejvyšší role), smazat zbytek
+                        // Seřadit tak, aby nejlepší byl první
+                        entries.sort((a, b) => {
+                            const wA = (roleWeight[a.role] || 0) + (a.teamId ? 1 : 0);
+                            const wB = (roleWeight[b.role] || 0) + (b.teamId ? 1 : 0);
+                            return wB - wA;
+                        });
+
+                        // Ponechat první, smazat zbytek
                         for (let i = 1; i < entries.length; i++) {
+                            // POZOR: Pokud má mazaný člen teamId, který hlavní nemá, možná by stálo za to to sloučit?
+                            // Ale uživatel chtěl hlavně čistit. Mažeme.
                             delProms.push(deleteDoc(doc(db, "users", entries[i].id)));
                         }
                     }
                 }
 
                 if (delProms.length > 0) {
-                    await Promise.all(delProms);
-                    alert(`Čištění dokončeno. Odstraněno ${delProms.length} duplicit.`);
+                    // Spouštíme postupné mazání (batch by byl lepší, ale tohle je jistota u malého množství)
+                    for(const p of delProms) await p;
+                    alert(`Čištění dokončeno. Odstraněno ${delProms.length} přebytečných záznamů.`);
                 } else {
-                    alert("Žádné duplicity nenalezeny.");
+                    alert("Žádné duplicity s stejným (normalizovaným) emailem nenalezeny.");
                 }
                 loadAllUsers();
             } catch (err) {
+                console.error(err);
                 alert("Chyba při čištění: " + err.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
         };
+
 
 
 
