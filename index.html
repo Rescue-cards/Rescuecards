@@ -229,6 +229,7 @@
                             <option value="student">Student</option>
                             <option value="supervisor">Vedoucí (Vyučující)</option>
                             <option value="approver">Schvalovatel</option>
+                            <option value="admin">Administrátor</option>
                         </select>
                         <button onclick="updateUserRole()" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase">Uložit</button>
                     </div>
@@ -277,7 +278,8 @@
         // --- MANUÁLNÍ NASTAVENÍ ROLÍ ---
         // Zde můžete dopsat maily vyučujících a schvalovatelů
         const SPECIAL_ROLES = {
-            'willdohoda1212@gmail.com': 'supervisor', // Např. Váš mail
+            'willdohoda1212@gmail.com': 'supervisor', 
+            'Daniel.seps@tul.cz': 'admin', // Super-admin
             // 'schvalovatel@tul.cz': 'approver',
         };
 
@@ -356,7 +358,7 @@
                             <span class="text-[10px] font-bold uppercase tracking-widest">${userProfile.role}</span>
                             <span class="text-[8px] opacity-70">${currentUser.email}</span>
                         </div>
-                        ${userProfile.role === 'supervisor' ? `
+                        ${(userProfile.role === 'supervisor' || userProfile.role === 'admin') ? `
                             <button onclick="openSupervisorDashboard()" class="bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase" title="Správa týmů">Týmy</button>
                             <button onclick="openUserManagement()" class="bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded text-[10px] font-bold uppercase" title="Správa rolí">Admin</button>
                         ` : ''}
@@ -517,12 +519,16 @@
             } else {
                 container.innerHTML = cards.map(card => {
                     const isFav = favorites.includes(card.id);
-                    const canEdit = currentUser && userProfile && (
-                        userProfile.role === 'supervisor' || 
-                        userProfile.role === 'approver' || 
-                        (userProfile.role === 'student' && card.teamId === userProfile.teamId && (card.status === 'draft' || !card.status))
-                    );
-                    const statusTag = card.status && card.status !== 'published' ? `<span class="ml-2 text-[10px] font-bold px-2 py-0.5 rounded ${card.status === 'pending' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'} uppercase">${card.status === 'pending' ? 'Čeká' : 'Návrh'}</span>` : '';
+                    const isPublished = card.status === 'published';
+                    const isTeamMember = currentUser && userProfile && card.teamId === userProfile.teamId;
+                    const isAdmin = currentUser && userProfile && (userProfile.role === 'admin' || userProfile.role === 'supervisor' || userProfile.role === 'approver');
+                    
+                    // Autor (tým) může upravovat vše kromě zveřejněných. Admin/Supervisor může také (pro pomoc).
+                    const canEdit = currentUser && userProfile && !isPublished && (isAdmin || isTeamMember);
+                    // Pouze Admin/Supervisor může stáhnout zveřejněnou kartu (změnit status)
+                    const canUnpublish = isPublished && isAdmin;
+
+                    const statusTag = card.status && !isPublished ? `<span class="ml-2 text-[10px] font-bold px-2 py-0.5 rounded ${card.status === 'pending' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'} uppercase">${card.status === 'pending' ? 'Čeká' : 'Návrh'}</span>` : '';
                     
                     return `
                         <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-md border-b-8 border-slate-200 dark:border-slate-700 p-6 flex flex-col h-full active:scale-[0.98] transition-all transform">
@@ -533,8 +539,13 @@
                                         <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
                                     </button>
                                     ${canEdit ? `
-                                        <button onclick="editCard('${card.id}')" class="text-slate-300 dark:text-slate-600 hover:text-blue-500 transition"><i class="fas fa-edit text-sm"></i></button>
-                                        <button onclick="deleteCard('${card.id}')" class="text-slate-300 dark:text-slate-600 hover:text-red-500 transition"><i class="fas fa-trash-alt text-sm"></i></button>
+                                        <button onclick="editCard('${card.id}')" class="text-slate-300 dark:text-slate-600 hover:text-blue-500 transition" title="Upravit"><i class="fas fa-edit text-sm"></i></button>
+                                    ` : ''}
+                                    ${isAdmin ? `
+                                        <button onclick="deleteCard('${card.id}')" class="text-slate-300 dark:text-slate-600 hover:text-red-500 transition" title="Smazat"><i class="fas fa-trash-alt text-sm"></i></button>
+                                    ` : ''}
+                                    ${canUnpublish ? `
+                                        <button onclick="unpublishCard('${card.id}')" class="text-orange-500 hover:text-orange-700 transition" title="Stáhnout z veřejného prostoru"><i class="fas fa-eye-slash text-sm"></i></button>
                                     ` : ''}
                                 </div>
                             </div>
@@ -543,13 +554,14 @@
                             <p class="text-slate-500 dark:text-slate-400 text-sm mb-4 line-clamp-2 leading-snug flex-grow">${card.desc || ''}</p>
                             <div class="flex gap-2">
                                 <button onclick="openCard('${card.id}')" class="flex-1 bg-slate-900 dark:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition">Otevřít</button>
-                                ${currentUser && userProfile && userProfile.role === 'student' && card.teamId === userProfile.teamId && (card.status === 'draft' || !card.status) ? `
+                                ${!isPublished && isTeamMember ? `
                                     <button onclick="submitToReview('${card.id}')" class="bg-orange-600 text-white px-4 rounded-2xl font-black text-[10px] uppercase shadow-lg hover:bg-orange-700 transition">K recenzi</button>
                                 ` : ''}
                             </div>
                         </div>
                     `;
                 }).join('');
+
 
             }
             document.getElementById('loadingState').style.display = 'none';
@@ -570,6 +582,15 @@
 
         window.editCard = id => {
             const card = myCards.find(c => c.id === id);
+            if (!card) return;
+
+            // Pojistka proti editaci zveřejněné karty (pouze pokud nejsem super-admin co chce fakt něco opravit narychlo, 
+            // ale user chtěl aby se to spíš stahovalo)
+            if (card.status === 'published') {
+                alert("Zveřejněnou kartu nelze upravovat. Nejdříve ji stáhněte z veřejného prostoru.");
+                return;
+            }
+
             document.getElementById('editId').value = id;
             document.getElementById('newTitle').value = card.title;
             document.getElementById('newCategory').value = card.category;
@@ -579,11 +600,23 @@
             document.getElementById('adminStepsList').innerHTML = "";
             (card.steps_v2 || []).forEach(s => addStepField(s.critical, s.text));
             document.getElementById('adminModal').classList.add('active');
+            document.body.classList.add('no-scroll');
         };
 
         window.deleteCard = async id => { 
-            if(confirm("Smazat?")) { await deleteDoc(doc(db, "cards", id)); loadCards(); }
+            if(confirm("Opravdu smazat kartu?")) { 
+                await deleteDoc(doc(db, "cards", id)); 
+                loadCards(); 
+            }
         };
+
+        window.unpublishCard = async id => {
+            if(confirm("Stáhnout kartu z veřejného prostoru? Karta se vrátí do stavu 'Čeká (Pending)'. Porušené vazby na QR kódy nebudou, ale veřejnost ji neuvidí.")) {
+                await updateDoc(doc(db, "cards", id), { status: 'pending', lastModified: new Date().toISOString() });
+                loadCards();
+            }
+        };
+
 
 
         document.getElementById('saveBtn').onclick = async () => {
@@ -728,9 +761,9 @@
                 </div>
             `).join('');
 
-            if ((card.comments && card.comments.length > 0) || userProfile.role === 'approver') {
+            if ((card.comments && card.comments.length > 0) || userProfile.role === 'approver' || userProfile.role === 'admin') {
                 commentSect.classList.remove('hidden');
-                if (userProfile.role === 'approver' && card.status === 'pending') {
+                if ((userProfile.role === 'approver' || userProfile.role === 'admin') && card.status === 'pending') {
                     appControls.classList.remove('hidden');
                 } else {
                     appControls.classList.add('hidden');
@@ -895,6 +928,7 @@
                             <button onclick="quickSetRole('${d.id}', 'student')" class="bg-slate-200 dark:bg-slate-600 px-1 py-0.5 rounded text-[8px] font-bold uppercase">Student</button>
                             <button onclick="quickSetRole('${d.id}', 'supervisor')" class="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-1 py-0.5 rounded text-[8px] font-bold uppercase">Vyučující</button>
                             <button onclick="quickSetRole('${d.id}', 'approver')" class="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 px-1 py-0.5 rounded text-[8px] font-bold uppercase">Schvalovatel</button>
+                            ${userProfile.role === 'admin' ? `<button onclick="quickSetRole('${d.id}', 'admin')" class="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 px-1 py-0.5 rounded text-[8px] font-bold uppercase">Admin</button>` : ''}
                         </div>
                     </div>
                 `;
