@@ -245,11 +245,16 @@
                     <div id="allUsersList" class="space-y-2 text-xs"></div>
                 </div>
                 <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30">
-                    <h4 class="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400 text-center uppercase tracking-widest">Správa dat a zálohy</h4>
-                    <button onclick="createSystemSnapshot(event)" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-xs font-bold uppercase shadow-lg transition active:scale-95">
-                        <i class="fas fa-camera-retro mr-2"></i> Vytvořit systémový snímek (Snapshot)
-                    </button>
-                    <p class="text-[9px] text-blue-500 mt-2 text-center italic">Zálohuje všechny karty a týmy do Firestore. Doporučeno před velkými změnami.</p>
+                    <h4 class="font-bold text-sm mb-2 text-blue-600 dark:text-blue-400 text-center uppercase tracking-widest">Správa dat a zálohy</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button onclick="createSystemSnapshot(event)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-[10px] font-bold uppercase shadow-lg transition active:scale-95">
+                            <i class="fas fa-camera-retro mr-2"></i> Zálohovat (Snapshot)
+                        </button>
+                        <button onclick="cleanDuplicateUsers(event)" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-3 rounded-xl text-[10px] font-bold uppercase shadow-lg transition active:scale-95">
+                            <i class="fas fa-broom mr-2"></i> Vyčistit duplicity
+                        </button>
+                    </div>
+                    <p class="text-[9px] text-blue-500 mt-2 text-center italic">Zálohuje systém nebo odstraní duplicitní maily (přednost má role).</p>
                 </div>
             </div>
             <button onclick="closeAll()" class="p-4 bg-slate-100 dark:bg-slate-900 text-xs font-bold uppercase">Zavřít</button>
@@ -325,19 +330,25 @@
 
                 if (!userDoc.exists()) {
                     userProfile = {
-                        email: user.email,
+                        email: emailLower,
                         role: roleToSet,
                         teamId: null
                     };
                     await setDoc(userDocRef, userProfile);
                 } else {
                     userProfile = userDoc.data();
+                    // Normalizace emailu na lowercase i ve starších záznamech
+                    if (userProfile.email !== emailLower) {
+                        userProfile.email = emailLower;
+                        await updateDoc(userDocRef, { email: emailLower });
+                    }
                     // Pokud je email v seznamu, ale v DB má jinou roli, aktualizovat
                     if (SPECIAL_ROLES[emailLower] && userProfile.role !== SPECIAL_ROLES[emailLower]) {
                         userProfile.role = SPECIAL_ROLES[emailLower];
                         await updateDoc(userDocRef, { role: userProfile.role });
                     }
                 }
+
                 document.getElementById('loginOverlay').classList.remove('active');
 
                 updateNavbarForUser();
@@ -820,10 +831,15 @@
         };
 
         window.approveCard = async () => {
-            if(confirm("Schválit kartu ke zveřejnění?")) {
+            if(!confirm("Schválit kartu ke zveřejnění?")) return;
+            try {
                 await updateDoc(doc(db, "cards", window.currentCardId), { status: 'published' });
                 closeAll();
                 loadCards();
+                alert("Karta byla úspěšně zveřejněna.");
+            } catch (err) {
+                console.error(err);
+                alert("Chyba při schvalování (zkontrolujte konzoli nebo práva): " + err.message);
             }
         };
 
@@ -831,18 +847,27 @@
             const comment = document.getElementById('approverComment').value;
             if(!comment) return alert("Napište komentář.");
             
-            const card = myCards.find(c => c.id === window.currentCardId);
-            const newComments = card.comments || [];
-            newComments.push({ text: comment, timestamp: new Date().toISOString() });
+            try {
+                const card = myCards.find(c => c.id === window.currentCardId);
+                const newComments = card.comments || [];
+                newComments.push({ text: comment, timestamp: new Date().toISOString() });
 
-            await updateDoc(doc(db, "cards", window.currentCardId), { 
-                comments: newComments,
-                status: 'draft' // Vrátit k úpravám
-            });
+                await updateDoc(doc(db, "cards", window.currentCardId), { 
+                    comments: newComments,
+                    status: 'draft' 
+                });
 
-            sendEmailToTeam(card.teamId, comment, card.title);
-            closeAll();
-            loadCards();
+                if (typeof sendEmailToTeam === 'function') {
+                    sendEmailToTeam(card.teamId, comment, card.title);
+                }
+                
+                closeAll();
+                loadCards();
+                alert("Komentář byl odeslán a karta vrácena k úpravám.");
+            } catch (err) {
+                console.error(err);
+                alert("Chyba při odesílání komentáře (zkontrolujte konzoli nebo práva): " + err.message);
+            }
         };
 
         // --- DASHBOARD VEDOUCÍHO ---
@@ -953,21 +978,37 @@
             container.innerHTML = "";
             snapshot.forEach(d => {
                 const u = d.data();
+                const r = u.role || 'student';
+                
+                const activeS = "bg-slate-600 text-white shadow-sm";
+                const activeV = "bg-blue-600 text-white shadow-sm";
+                const activeA = "bg-purple-600 text-white shadow-sm";
+                const activeAdm = "bg-red-600 text-white shadow-sm";
+
+                const inactiveS = "bg-slate-100 dark:bg-slate-800 text-slate-400";
+                const inactiveV = "bg-blue-50 dark:bg-blue-900/20 text-blue-400";
+                const inactiveA = "bg-purple-50 dark:bg-purple-900/20 text-purple-400";
+                const inactiveAdm = "bg-red-50 dark:bg-red-900/20 text-red-400";
+
                 container.innerHTML += `
-                    <div class="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                    <div class="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700 rounded-lg group">
                         <div class="flex flex-col">
                             <span class="font-bold">${u.email}</span>
-                            <span class="opacity-50 uppercase tracking-tighter" style="font-size: 8px;">Role: ${u.role} | Tým: ${u.teamId || 'Žádný'}</span>
+                            <span class="opacity-50 uppercase tracking-tighter" style="font-size: 8px;">Tým: ${u.teamId || 'Žádný'}</span>
                         </div>
-                        <div class="flex gap-1">
-                            <button onclick="quickSetRole('${d.id}', 'student')" class="bg-slate-200 dark:bg-slate-600 px-1 py-0.5 rounded text-[8px] font-bold uppercase">Student</button>
-                            <button onclick="quickSetRole('${d.id}', 'supervisor')" class="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-1 py-0.5 rounded text-[8px] font-bold uppercase">Vyučující</button>
-                            <button onclick="quickSetRole('${d.id}', 'approver')" class="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 px-1 py-0.5 rounded text-[8px] font-bold uppercase">Schvalovatel</button>
-                            ${userProfile.role === 'admin' ? `<button onclick="quickSetRole('${d.id}', 'admin')" class="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 px-1 py-0.5 rounded text-[8px] font-bold uppercase">Admin</button>` : ''}
+                        <div class="flex gap-1 items-center">
+                            <button onclick="quickSetRole('${d.id}', 'student')" class="${r === 'student' ? activeS : inactiveS} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Student</button>
+                            <button onclick="quickSetRole('${d.id}', 'supervisor')" class="${r === 'supervisor' ? activeV : inactiveV} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Vyučující</button>
+                            <button onclick="quickSetRole('${d.id}', 'approver')" class="${r === 'approver' ? activeA : inactiveA} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Schvalovatel</button>
+                            ${userProfile.role === 'admin' ? `
+                                <button onclick="quickSetRole('${d.id}', 'admin')" class="${r === 'admin' ? activeAdm : inactiveAdm} px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all">Admin</button>
+                                <button onclick="deleteUser('${d.id}', '${u.email}')" class="ml-1 text-slate-400 hover:text-red-600 transition p-1"><i class="fas fa-trash-alt"></i></button>
+                            ` : ''}
                         </div>
                     </div>
                 `;
             });
+
         }
 
         window.updateUserRole = async () => {
@@ -995,6 +1036,25 @@
                 loadAllUsers();
             }
         };
+
+        window.deleteUser = async (uid, email) => {
+            if(!confirm(`OPRAVDU smazat uživatele ${email}? Tímto také ztratí přístup k týmu.`)) return;
+            try {
+                const userD = await getDoc(doc(db, "users", uid));
+                if(userD.exists() && userD.data().teamId) {
+                    const tid = userD.data().teamId;
+                    const teamD = await getDoc(doc(db, "teams", tid));
+                    if(teamD.exists()) {
+                        const members = (teamD.data().members || []).filter(m => m !== uid);
+                        await updateDoc(doc(db, "teams", tid), { members });
+                    }
+                }
+                await deleteDoc(doc(db, "users", uid));
+                loadAllUsers();
+                alert("Uživatel smazán.");
+            } catch(e) { alert("Chyba: " + e.message); }
+        };
+
 
         // --- MIGRACE A ZÁLOHY ---
         window.createSystemSnapshot = async (e) => {
@@ -1028,6 +1088,57 @@
                 btn.innerHTML = originalText;
             }
         };
+
+        window.cleanDuplicateUsers = async (e) => {
+            if(!confirm("Prohledat systém a odstranit duplicitní maily? (Více záznamů se stejným mailem). Ponechám vždy ten s 'vyšší' rolí.")) return;
+            
+            const btn = e.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Čistím...';
+
+            try {
+                const snapshot = await getDocs(collection(db, "users"));
+                const finalEmailMap = {};
+                
+                snapshot.forEach(d => {
+                    const u = { id: d.id, ...d.data() };
+                    const email = (u.email || "").toLowerCase();
+                    if(!email) return;
+                    if(!finalEmailMap[email]) finalEmailMap[email] = [u];
+                    else finalEmailMap[email].push(u);
+                });
+
+                let delProms = [];
+                const roleWeight = { 'admin': 10, 'supervisor': 5, 'approver': 3, 'student': 1 };
+
+                for (let email in finalEmailMap) {
+                    const entries = finalEmailMap[email];
+                    if (entries.length > 1) {
+                        // Seřadit podle role (nejvyšší první)
+                        entries.sort((a, b) => (roleWeight[b.role] || 0) - (roleWeight[a.role] || 0));
+                        // Ponechat první (nejvyšší role), smazat zbytek
+                        for (let i = 1; i < entries.length; i++) {
+                            delProms.push(deleteDoc(doc(db, "users", entries[i].id)));
+                        }
+                    }
+                }
+
+                if (delProms.length > 0) {
+                    await Promise.all(delProms);
+                    alert(`Čištění dokončeno. Odstraněno ${delProms.length} duplicit.`);
+                } else {
+                    alert("Žádné duplicity nenalezeny.");
+                }
+                loadAllUsers();
+            } catch (err) {
+                alert("Chyba při čištění: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        };
+
 
 
         window.deleteTeam = async (id) => {
