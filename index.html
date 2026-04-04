@@ -864,12 +864,18 @@
             const appControls = document.getElementById('approverControls');
             const userRole = userProfile ? userProfile.role : 'public';
             
-            commentsList.innerHTML = (card.comments || []).map(c => `
-                <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs mb-2">
-                    <p class="mb-1">${c.text}</p>
-                    <span class="opacity-50 text-[8px] uppercase font-bold">${new Date(c.timestamp).toLocaleString()}</span>
-                </div>
-            `).join('');
+            commentsList.innerHTML = (card.comments || []).map(c => {
+                const canDelete = currentUser && (c.authorId === currentUser.uid || userRole === 'admin' || userRole === 'approver' || userRole === 'supervisor');
+                return `
+                    <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs mb-2 relative group">
+                        <p class="mb-1 pr-6">${c.text}</p>
+                        <div class="flex justify-between items-center opacity-50">
+                            <span class="text-[8px] font-bold uppercase">${c.authorEmail ? c.authorEmail.split('@')[0] : 'Systém'} • ${new Date(c.timestamp).toLocaleString()}</span>
+                            ${canDelete ? `<button onclick="deleteComment('${card.id}', '${c.timestamp}')" class="text-red-400 hover:text-red-600 transition-colors hidden group-hover:block absolute top-3 right-3" title="Smazat komentář"><i class="fas fa-trash-alt"></i></button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
             
             // Komentáře a ovládací prvky schvalovatele jen pro oprávněné
             if ((card.comments && card.comments.length > 0) || userRole === 'approver' || userRole === 'admin') {
@@ -925,7 +931,12 @@
             try {
                 const card = myCards.find(c => c.id === window.currentCardId);
                 const newComments = card.comments || [];
-                newComments.push({ text: comment, timestamp: new Date().toISOString() });
+                newComments.push({ 
+                    text: comment, 
+                    timestamp: new Date().toISOString(),
+                    authorId: currentUser.uid,
+                    authorEmail: currentUser.email
+                });
 
                 await updateDoc(doc(db, "cards", window.currentCardId), { 
                     comments: newComments,
@@ -942,6 +953,22 @@
             } catch (err) {
                 console.error(err);
                 alert("Chyba při odesílání komentáře (zkontrolujte konzoli nebo práva): " + err.message);
+            }
+        };
+
+        window.deleteComment = async (cardId, timestamp) => {
+            if(!confirm("Opravdu smazat tento komentář?")) return;
+            try {
+                const card = myCards.find(c => c.id === cardId);
+                if(!card) return;
+                const newComments = (card.comments || []).filter(c => c.timestamp !== timestamp);
+                await updateDoc(doc(db, "cards", cardId), { comments: newComments });
+                
+                card.comments = newComments;
+                openCard(cardId); 
+            } catch (err) {
+                console.error(err);
+                alert("Chyba při mazání komentáře.");
             }
         };
 
@@ -1082,13 +1109,17 @@
                                 </span>
                                 <span class="opacity-50 uppercase tracking-tighter" style="font-size: 7px;">Role: ${r} | Tým: ${u.teamId || 'Žádný'} | ID: ${d.id}</span>
                             </div>
-                            <div class="flex gap-1 items-center">
-                                <button onclick="quickSetRole('${d.id}', 'student')" class="${r === 'student' ? activeS : inactiveS} px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition-all">Student</button>
-                                <button onclick="quickSetRole('${d.id}', 'supervisor')" class="${r === 'supervisor' ? activeV : inactiveV} px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition-all">Vyučující</button>
-                                <button onclick="quickSetRole('${d.id}', 'approver')" class="${r === 'approver' ? activeA : inactiveA} px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition-all">Schvalovatel</button>
+                            <div class="flex gap-2 items-center">
+                                <select onchange="quickSetRole('${d.id}', this.value)" class="text-[10px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500">
+                                    <option value="student" ${r === 'student' ? 'selected' : ''}>Student</option>
+                                    <option value="supervisor" ${r === 'supervisor' ? 'selected' : ''}>Vyučující</option>
+                                    <option value="approver" ${r === 'approver' ? 'selected' : ''}>Schvalovatel</option>
+                                    ${userProfile.role === 'admin' ? `
+                                        <option value="admin" ${r === 'admin' ? 'selected' : ''}>Administrátor</option>
+                                    ` : ''}
+                                </select>
                                 ${userProfile.role === 'admin' ? `
-                                    <button onclick="quickSetRole('${d.id}', 'admin')" class="${r === 'admin' ? activeAdm : inactiveAdm} px-1.5 py-0.5 rounded text-[7px] font-bold uppercase transition-all">Admin</button>
-                                    <button onclick="deleteUser('${d.id}', '${u.email}')" class="ml-1 text-slate-400 hover:text-red-600 transition p-1"><i class="fas fa-trash-alt"></i></button>
+                                    <button onclick="deleteUser('${d.id}', '${u.email}')" class="text-slate-400 hover:text-red-600 transition p-1" title="Smazat uživatele"><i class="fas fa-trash-alt"></i></button>
                                 ` : ''}
                             </div>
                         </div>
@@ -1131,6 +1162,8 @@
             if(confirm(`Změnit roli na ${role}?`)) {
                 await updateDoc(doc(db, "users", uid), { role: role });
                 loadAllUsers();
+            } else {
+                loadAllUsers(); // Obnovit, aby se v selectu vrátila původní hodnota
             }
         };
 
