@@ -75,7 +75,7 @@
                 <span class="hidden sm:inline">RescueCards Hub</span>
                 <span class="sm:hidden">RescueCards</span>
             </h1>
-            <div class="flex items-center gap-2 sm:gap-4 shrink-0">
+            <div id="navRight" class="flex items-center gap-2 sm:gap-4 shrink-0">
                 <button onclick="toggleDarkMode()" class="bg-red-700 dark:bg-slate-700 hover:bg-red-800 dark:hover:bg-slate-600 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-inner transition active:scale-95" title="Přepnout tmavý režim">
                     <i id="themeIcon" class="fas fa-moon text-sm"></i>
                 </button>
@@ -93,7 +93,7 @@
         <input type="text" id="searchInput" onkeyup="filterAndSearchCards()" placeholder="Vyhledat kartu..." class="w-full md:w-3/4 p-4 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-red-400 dark:text-white transition-colors duration-300 mb-4">
         
         <div class="relative max-w-full mx-auto">
-            <div class="filter-scroll-container no-scrollbar flex gap-2 px-2 pb-2">
+            <div class="filter-scroll-container no-scrollbar flex gap-2 px-2 pb-2" id="filterContainer">
                 <button onclick="filterCards('all', this)" class="filter-btn active bg-red-600 dark:bg-red-700 text-white px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-transparent whitespace-nowrap transition">Vše</button>
                 <button onclick="filterCards('fav', this)" class="filter-btn bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 dark:border-slate-700 whitespace-nowrap transition italic">
                     <i class="fas fa-heart mr-1"></i> Oblíbené
@@ -263,11 +263,11 @@
                         <button onclick="createSystemSnapshot(event)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-[10px] font-bold uppercase shadow-lg transition active:scale-95">
                             <i class="fas fa-camera-retro mr-2"></i> Zálohovat (Snapshot)
                         </button>
-                        <button onclick="cleanDuplicateUsers(event)" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-3 rounded-xl text-[10px] font-bold uppercase shadow-lg transition active:scale-95">
-                            <i class="fas fa-broom mr-2"></i> Vyčistit duplicity
+                        <button onclick="downloadJsonBackup(event)" class="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl text-[10px] font-bold uppercase shadow-lg transition active:scale-95">
+                            <i class="fas fa-file-export mr-2"></i> Exportovat (JSON)
                         </button>
                     </div>
-                    <p class="text-[9px] text-blue-500 mt-2 text-center italic">Zálohuje systém nebo odstraní duplicitní maily (přednost má role).</p>
+                    <p class="text-[9px] text-blue-500 mt-2 text-center italic">Záloha snapshotem odstraňuje obrázky (kvůli limitu 1MB). JSON export obsahuje kompletní data.</p>
                 </div>
             </div>
             <button onclick="closeAll()" class="p-4 bg-slate-100 dark:bg-slate-900 text-xs font-bold uppercase">Zavřít</button>
@@ -332,50 +332,63 @@
             }
         };
 
+        let authInitialized = false;
+
         onAuthStateChanged(auth, async (user) => {
+            console.log("Auth event:", user ? user.email : "null");
             if (user) {
                 currentUser = user;
                 const userDocRef = doc(db, "users", user.uid);
-                const userDoc = await getDoc(userDocRef);
                 
-                const emailLower = user.email.toLowerCase();
-                let roleToSet = SPECIAL_ROLES[emailLower] || 'student';
+                try {
+                    let userDoc = await getDoc(userDocRef);
+                    const emailLower = user.email.toLowerCase();
 
-                if (!userDoc.exists()) {
-                    userProfile = {
-                        email: emailLower,
-                        role: roleToSet,
-                        teamId: null
-                    };
-                    await setDoc(userDocRef, userProfile);
-                } else {
-                    userProfile = userDoc.data();
-                    // Normalizace emailu na lowercase i ve starších záznamech
-                    if (userProfile.email !== emailLower) {
-                        userProfile.email = emailLower;
-                        await updateDoc(userDocRef, { email: emailLower });
+                    if (!userDoc.exists()) {
+                        let roleToSet = SPECIAL_ROLES[emailLower] || 'student';
+                        userProfile = {
+                            email: emailLower,
+                            role: roleToSet,
+                            teamId: null,
+                            createdAt: new Date().toISOString()
+                        };
+                        await setDoc(userDocRef, userProfile);
+                    } else {
+                        userProfile = userDoc.data();
+                        // Normalizace emailu
+                        if (userProfile.email !== emailLower) {
+                            userProfile.email = emailLower;
+                            await updateDoc(userDocRef, { email: emailLower });
+                        }
+                        // Aktualizace role dle seznamu
+                        if (SPECIAL_ROLES[emailLower] && userProfile.role !== SPECIAL_ROLES[emailLower]) {
+                            userProfile.role = SPECIAL_ROLES[emailLower];
+                            await updateDoc(userDocRef, { role: userProfile.role });
+                        }
                     }
-                    // Pokud je email v seznamu, ale v DB má jinou roli, aktualizovat
-                    if (SPECIAL_ROLES[emailLower] && userProfile.role !== SPECIAL_ROLES[emailLower]) {
-                        userProfile.role = SPECIAL_ROLES[emailLower];
-                        await updateDoc(userDocRef, { role: userProfile.role });
+
+                    // Zavřít okno pouze pokud jsme skutečně přihlášeni a profil je připraven
+                    const overlay = document.getElementById('loginOverlay');
+                    if (overlay && overlay.classList.contains('active')) {
+                        overlay.classList.remove('active');
                     }
+                } catch (err) {
+                    console.error("Auth error:", err);
                 }
-
-                document.getElementById('loginOverlay').classList.remove('active');
-
-                updateNavbarForUser();
-                loadCards();
             } else {
                 currentUser = null;
                 userProfile = null;
-                updateNavbarForUser();
-                loadCards();
             }
+            
+            authInitialized = true;
+            updateNavbarForUser();
+            loadCards();
         });
 
         function updateNavbarForUser() {
-            const navRight = document.querySelector('nav div.max-w-4xl div.flex');
+            const navRight = document.getElementById('navRight');
+            if(!navRight) return;
+
             const existingProfile = document.getElementById('userProfileMenu');
             const addBtn = document.getElementById('addCardBtn');
 
@@ -397,14 +410,43 @@
                     </div>
                 `;
                 navRight.insertAdjacentHTML('beforeend', profileHtml);
+                updateFiltersByRole();
+            } else if (!authInitialized) {
+                addBtn.classList.add('hidden');
+                // Neukazovat nic, zatím se načítá
             } else {
                 addBtn.classList.add('hidden');
                 const loginLink = `
                     <div id="userProfileMenu" class="flex items-center gap-2 border-l border-red-500 dark:border-slate-700 pl-3">
-                        <button onclick="openLogin()" class="text-[10px] font-bold uppercase tracking-widest hover:text-red-200 transition">Přihlásit se</button>
+                        <button onclick="window.openLogin()" class="text-[10px] font-bold uppercase tracking-widest hover:text-red-200 transition">Přihlásit se</button>
                     </div>
                 `;
                 navRight.insertAdjacentHTML('beforeend', loginLink);
+                updateFiltersByRole();
+            }
+        }
+
+        function updateFiltersByRole() {
+            const container = document.getElementById('filterContainer');
+            if(!container) return;
+
+            // Odstranění starých admin filtrů pokud existují
+            document.querySelectorAll('.admin-filter').forEach(f => f.remove());
+
+            const role = userProfile ? userProfile.role : 'public';
+            if (role === 'admin' || role === 'supervisor' || role === 'approver') {
+                const adminFilters = `
+                    <button onclick="filterCards('status:pending', this)" class="admin-filter filter-btn bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-orange-200 dark:border-orange-800 whitespace-nowrap transition ml-4">
+                       <i class="fas fa-clock mr-1"></i> Ke schválení
+                    </button>
+                    <button onclick="filterCards('status:draft', this)" class="admin-filter filter-btn bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-slate-200 dark:border-slate-600 whitespace-nowrap transition">
+                       <i class="fas fa-pen-nib mr-1"></i> Koncepty
+                    </button>
+                    <button onclick="filterCards('status:published', this)" class="admin-filter filter-btn bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-5 py-2 rounded-full text-xs font-bold shadow-sm border border-green-200 dark:border-green-800 whitespace-nowrap transition">
+                       <i class="fas fa-check mr-1"></i> Zveřejněné
+                    </button>
+                `;
+                container.insertAdjacentHTML('beforeend', adminFilters);
             }
         }
 
@@ -783,13 +825,6 @@
                         </div>
                     </div>
 
-                   <div class="flex gap-3 shrink-0 items-start">
-                        <div class="flex flex-col items-center gap-1">
-                            <button onclick="shareCard('${card.id}')" class="w-12 h-12 bg-blue-50 dark:bg-slate-700 border-2 border-blue-100 dark:border-slate-600 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-slate-600 transition flex items-center justify-center shadow-sm active:scale-95">
-                                <i class="fas fa-share-nodes text-lg"></i>
-                            </button>
-                            <span class="text-[8px] font-bold uppercase text-slate-400 tracking-wider">Sdílet</span>
-                        </div>
 
                         <div class="flex flex-col items-center gap-1">
                             <button onclick="downloadCard('${card.id}')" class="w-12 h-12 bg-red-50 dark:bg-slate-700 border-2 border-red-100 dark:border-slate-600 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-slate-600 transition flex items-center justify-center shadow-sm active:scale-95">
@@ -1120,7 +1155,7 @@
 
         // --- MIGRACE A ZÁLOHY ---
         window.createSystemSnapshot = async (e) => {
-            if(!confirm("Vytvořit systémový snímek? Tato akce zálohuje všechny aktuální karty a týmy. Můžete ji použít pro obnovu v případě chyby (vyžaduje zásah v konzoli).")) return;
+            if(!confirm("Vytvořit systémový snímek? AKTUALIZOVÁNO: Z důvodu limitů Firestore budou obrázky ze snapshotu odstraněny. Pro kompletní zálohu použijte JSON Export.")) return;
             
             const btn = e.currentTarget;
             const originalText = btn.innerHTML;
@@ -1131,19 +1166,27 @@
                 const cardsSnap = await getDocs(collection(db, "cards"));
                 const teamsSnap = await getDocs(collection(db, "teams"));
                 
-                const cards = []; cardsSnap.forEach(d => cards.push({id: d.id, ...d.data()}));
+                // Odstranění obrázků pro úsporu místa - hlavní důvod proč to nešlo (překročení 1MB na dokument)
+                const cards = []; 
+                cardsSnap.forEach(d => {
+                    const data = d.data();
+                    delete data.image; 
+                    cards.push({id: d.id, ...data});
+                });
                 const teams = []; teamsSnap.forEach(d => teams.push({id: d.id, ...d.data()}));
 
                 const snapshot = {
                     timestamp: new Date().toISOString(),
                     backupBy: currentUser.email,
+                    version: "2.0 (No images)",
                     data: { cards, teams }
                 };
 
                 await addDoc(collection(db, "system_snapshots"), snapshot);
-                alert(`Záloha byla úspěšně vytvořena a uložena do Firestore (system_snapshots). Celkem ${cards.length} karet a ${teams.length} týmů.`);
+                alert(`Záloha (bez obrázků) byla úspěšně vytvořena. Celkem ${cards.length} karet a ${teams.length} týmů.`);
                 
             } catch (err) {
+                console.error("Snapshot error:", err);
                 alert("Chyba při zálohování: " + err.message);
             } finally {
                 btn.disabled = false;
@@ -1151,60 +1194,46 @@
             }
         };
 
-        window.cleanDuplicateUsers = async (e) => {
-            if(!confirm("Prohledat systém a odstranit duplicitní maily? (Ponechám vždy ten s 'vyšší' rolí a vyšší prioritou dat).")) return;
-            
+        window.downloadJsonBackup = async (e) => {
             const btn = e.currentTarget;
             const originalText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Čistím...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Exportuji...';
 
             try {
-                // Vypnout real-time load na chvilku pokud by dělal neplechu
-                const snapshot = await getDocs(collection(db, "users"));
-                const finalEmailMap = {};
+                const cardsSnap = await getDocs(collection(db, "cards"));
+                const teamsSnap = await getDocs(collection(db, "teams"));
+                const usersSnap = await getDocs(collection(db, "users"));
                 
-                snapshot.forEach(d => {
-                    const u = { id: d.id, ...d.data() };
-                    const email = (u.email || "").trim().toLowerCase();
-                    if(!email) return;
-                    if(!finalEmailMap[email]) finalEmailMap[email] = [u];
-                    else finalEmailMap[email].push(u);
-                });
+                const data = {
+                    metadata: {
+                        timestamp: new Date().toISOString(),
+                        exportedBy: currentUser.email,
+                        source: "RescueCards Hub"
+                    },
+                    cards: [],
+                    teams: [],
+                    users: []
+                };
 
-                let delProms = [];
-                const roleWeight = { 'admin': 100, 'supervisor': 50, 'approver': 30, 'student': 10 };
+                cardsSnap.forEach(d => data.cards.push({id: d.id, ...d.data()}));
+                teamsSnap.forEach(d => data.teams.push({id: d.id, ...d.data()}));
+                usersSnap.forEach(d => data.users.push({id: d.id, ...d.data()}));
 
-                for (let email in finalEmailMap) {
-                    const entries = finalEmailMap[email];
-                    if (entries.length > 1) {
-                        // Seřadit tak, aby nejlepší byl první
-                        entries.sort((a, b) => {
-                            const wA = (roleWeight[a.role] || 0) + (a.teamId ? 1 : 0);
-                            const wB = (roleWeight[b.role] || 0) + (b.teamId ? 1 : 0);
-                            return wB - wA;
-                        });
-
-                        // Ponechat první, smazat zbytek
-                        for (let i = 1; i < entries.length; i++) {
-                            // POZOR: Pokud má mazaný člen teamId, který hlavní nemá, možná by stálo za to to sloučit?
-                            // Ale uživatel chtěl hlavně čistit. Mažeme.
-                            delProms.push(deleteDoc(doc(db, "users", entries[i].id)));
-                        }
-                    }
-                }
-
-                if (delProms.length > 0) {
-                    // Spouštíme postupné mazání (batch by byl lepší, ale tohle je jistota u malého množství)
-                    for(const p of delProms) await p;
-                    alert(`Čištění dokončeno. Odstraněno ${delProms.length} přebytečných záznamů.`);
-                } else {
-                    alert("Žádné duplicity s stejným (normalizovaným) emailem nenalezeny.");
-                }
-                loadAllUsers();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `rescuecards_full_backup_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                alert("Kompletní export (včetně obrázků a uživatelů) byl stažen jako JSON soubor.");
             } catch (err) {
-                console.error(err);
-                alert("Chyba při čištění: " + err.message);
+                console.error("Export error:", err);
+                alert("Chyba při exportu: " + err.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
@@ -1267,9 +1296,22 @@
         window.filterAndSearchCards = () => {
             const term = document.getElementById('searchInput').value.toLowerCase();
             let filtered = myCards;
-            if (currentFilter === 'fav') filtered = filtered.filter(c => favorites.includes(c.id));
-            else if (currentFilter !== 'all') filtered = filtered.filter(c => c.category === currentFilter);
-            if (term) filtered = filtered.filter(c => c.title.toLowerCase().includes(term) || (c.tags && c.tags.some(t => t.includes(term))));
+            
+            if (currentFilter === 'fav') {
+                filtered = filtered.filter(c => favorites.includes(c.id));
+            } else if (currentFilter.startsWith('status:')) {
+                const status = currentFilter.split(':')[1];
+                filtered = filtered.filter(c => c.status === status);
+            } else if (currentFilter !== 'all') {
+                filtered = filtered.filter(c => c.category === currentFilter);
+            }
+            
+            if (term) {
+                filtered = filtered.filter(c => 
+                    c.title.toLowerCase().includes(term) || 
+                    (c.tags && c.tags.some(t => t.includes(term)))
+                );
+            }
             renderGrid(filtered);
         };
 
@@ -1286,37 +1328,6 @@
             filterAndSearchCards();
         };
 
-// --- FUNKCE PRO SDÍLENÍ KARTY ---
-        window.shareCard = async (id) => {
-            const card = myCards.find(c => c.id === id);
-            if (!card) return;
-
-            // Vygenerujeme si odkaz přímo na tuto konkrétní kartu
-            const baseUrl = window.location.origin + window.location.pathname;
-            const uniqueCardUrl = `${baseUrl}?id=${card.id}`;
-
-            const shareData = {
-                title: `RescueCards: ${card.title}`,
-                text: `Koukni na záchranářský postup: ${card.title}`,
-                url: uniqueCardUrl
-            };
-
-            try {
-                // Zkusíme zavolat nativní sdílecí okno zařízení
-                if (navigator.share) {
-                    await navigator.share(shareData);
-                } else {
-                    // Záloha pro staré počítače: Zkopíruje odkaz do schránky
-                    await navigator.clipboard.writeText(uniqueCardUrl);
-                    alert('Odkaz na kartu byl zkopírován do schránky. Můžeš ho kamkoliv vložit!');
-                }
-            } catch (err) {
-                // Pokud to uživatel zavře bez sdílení, nevypisujeme chybu
-                if (err.name !== 'AbortError') {
-                    console.error('Chyba při sdílení:', err);
-                }
-            }
-        };
 
         window.downloadCard = (id) => {
             const card = myCards.find(c => c.id === id);
